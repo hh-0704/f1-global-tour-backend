@@ -1,94 +1,61 @@
-import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Injectable } from '@nestjs/common';
+import { BaseF1Service } from '../../common/services/base-f1.service';
+import { CachedOpenF1ClientService } from '../../common/services/cached-openf1-client.service';
+import { SessionsQueryParams, DriversQueryParams } from '../../common/interfaces/query-params.interface';
+import { F1TransformationsUtil } from '../../common/utils/f1-transformations.util';
 
 @Injectable()
-export class SessionsService {
-  constructor(private configService: ConfigService) {}
+export class SessionsService extends BaseF1Service {
+  constructor(cachedOpenf1Client: CachedOpenF1ClientService) {
+    super(cachedOpenf1Client);
+  }
 
   async getSessions(country?: string, year?: string) {
-    try {
-      const baseUrl = this.configService.get<string>('openf1.baseUrl');
-      let url = `${baseUrl}/sessions`;
-      
-      const params = new URLSearchParams();
-      if (country) params.append('country_name', country);
-      if (year) params.append('year', year);
-      
-      if (params.toString()) {
-        url += `?${params.toString()}`;
-      }
+    return this.executeWithErrorHandling(async () => {
+      const params: SessionsQueryParams = {};
+      if (country) params.country_name = country;
+      if (year) params.year = year;
 
-      // For now, return mock data until we implement HTTP client
-      return [
-        {
-          meeting_key: 1216,
-          session_key: 9134,
-          location: "Spa-Francorchamps",
-          date_start: "2023-07-28T11:30:00+00:00",
-          date_end: "2023-07-28T12:30:00+00:00",
-          session_type: "Practice",
-          session_name: "Practice 1",
-          country_key: 16,
-          country_code: "BEL",
-          country_name: "Belgium",
-          circuit_key: 7,
-          circuit_short_name: "Spa-Francorchamps",
-          gmt_offset: "02:00:00",
-          year: 2023
-        }
-      ];
-    } catch (error) {
-      throw new HttpException(
-        'Failed to fetch sessions',
-        HttpStatus.SERVICE_UNAVAILABLE,
-      );
-    }
+      const sessions = await this.cachedOpenf1Client.fetchSessions(params);
+      
+      return sessions;
+    }, 'fetch sessions', { country, year });
   }
 
   async getSessionDrivers(sessionKey: number) {
-    try {
-      // Mock data for now
-      return [
-        {
-          meeting_key: 1219,
-          session_key: sessionKey,
-          driver_number: 1,
-          full_name: "Max VERSTAPPEN",
-          name_acronym: "VER",
-          team_name: "Red Bull Racing",
-          team_colour: "3671C6"
-        },
-        {
-          meeting_key: 1219,
-          session_key: sessionKey,
-          driver_number: 16,
-          full_name: "Charles LECLERC",
-          name_acronym: "LEC",
-          team_name: "Ferrari",
-          team_colour: "E8002D"
-        }
-      ];
-    } catch (error) {
-      throw new HttpException(
-        'Failed to fetch session drivers',
-        HttpStatus.SERVICE_UNAVAILABLE,
-      );
-    }
+    return this.executeWithErrorHandling(async () => {
+      const params: DriversQueryParams = { session_key: sessionKey };
+      const drivers = await this.cachedOpenf1Client.fetchDrivers(params);
+      
+      // Transform drivers using shared utility
+      return drivers.map(driver => F1TransformationsUtil.transformDriverData(driver));
+    }, 'fetch session drivers', { sessionKey });
   }
 
   async startReplay(sessionKey: number) {
-    try {
-      // TODO: Implement caching logic for replay data
-      return {
-        sessionKey,
+    return this.executeWithErrorHandling(async () => {
+      // Validate session exists and get drivers
+      const drivers = await this.getSessionDrivers(sessionKey);
+      
+      // Use base class validation method
+      if (drivers.length === 0) {
+        await this.validateSession(sessionKey, 'replay data');
+      }
+
+      // Pre-load all replay data into cache
+      const replayData = await this.cachedOpenf1Client.preloadReplayData(sessionKey);
+      
+      return this.createResponse(sessionKey, {
         cachingStatus: 'completed',
-        availableData: ['drivers', 'laps', 'intervals', 'car_data', 'race_control']
-      };
-    } catch (error) {
-      throw new HttpException(
-        'Failed to start replay',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
+        availableData: ['drivers', 'laps', 'intervals', 'car_data', 'race_control', 'stints'],
+        driverCount: drivers.length,
+        dataStats: {
+          lapsCount: replayData.laps.length,
+          intervalsCount: replayData.intervals.length,
+          stintsCount: replayData.stints.length
+        },
+        drivers: drivers  // Already transformed in getSessionDrivers
+      });
+    }, 'start replay session', { sessionKey });
   }
 }
