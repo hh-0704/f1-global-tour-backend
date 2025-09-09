@@ -1,11 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { OpenF1ClientService } from '../../common/services/openf1-client.service';
+import { CircuitBreakerStats } from '../../common/services/circuit-breaker.service';
+import { HealthStatus, CircuitBreakerStatsWithHealth, ResetResponse } from './interfaces/health.interface';
 
 @Injectable()
 export class HealthService {
   constructor(private readonly openf1Client: OpenF1ClientService) {}
 
-  getHealthStatus() {
+  getHealthStatus(): HealthStatus {
     const circuitBreakerStats = this.openf1Client.getCircuitBreakerStats();
     
     return {
@@ -20,7 +22,7 @@ export class HealthService {
     };
   }
 
-  getCircuitBreakerStats() {
+  getCircuitBreakerStats(): CircuitBreakerStatsWithHealth {
     const stats = this.openf1Client.getCircuitBreakerStats();
     
     return {
@@ -30,7 +32,7 @@ export class HealthService {
     };
   }
 
-  resetCircuitBreaker() {
+  resetCircuitBreaker(): ResetResponse {
     this.openf1Client.resetCircuitBreaker();
     
     return {
@@ -40,7 +42,7 @@ export class HealthService {
     };
   }
 
-  private getHealthStatusFromStats(stats: any): string {
+  private getHealthStatusFromStats(stats: CircuitBreakerStats): string {
     switch (stats.state) {
       case 'CLOSED':
         return 'healthy';

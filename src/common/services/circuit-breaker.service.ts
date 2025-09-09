@@ -38,7 +38,10 @@ export class CircuitBreakerService {
     monitoringPeriod: 10000  // 10초
   };
 
-  constructor() {
+  constructor(options?: Partial<CircuitBreakerOptions>) {
+    if (options) {
+      this.options = { ...this.options, ...options };
+    }
     this.logger.log(`Circuit Breaker initialized with options: ${JSON.stringify(this.options)}`);
   }
 
@@ -59,7 +62,7 @@ export class CircuitBreakerService {
         this.state = CircuitBreakerState.HALF_OPEN;
         this.logger.log('Circuit Breaker: Transitioning to HALF_OPEN state');
       } else {
-        this.logger.warn('Circuit Breaker: Request blocked (OPEN state)');
+        this.logger.debug('Circuit Breaker: Request blocked (OPEN state)');
         if (fallbackData !== undefined) {
           return fallbackData;
         }
@@ -76,7 +79,7 @@ export class CircuitBreakerService {
       
       // fallback 데이터가 있고 실패 임계값에 도달했으면 반환
       if (fallbackData !== undefined && this.failureCount >= this.options.failureThreshold) {
-        this.logger.warn('Circuit Breaker: Returning fallback data due to excessive failures');
+        this.logger.log('Circuit Breaker: Returning fallback data due to excessive failures');
         return fallbackData;
       }
       
@@ -93,19 +96,20 @@ export class CircuitBreakerService {
     
     if (this.state === CircuitBreakerState.HALF_OPEN) {
       this.state = CircuitBreakerState.CLOSED;
-      this.logger.log('Circuit Breaker: Recovered to CLOSED state');
+      this.logger.log('Circuit Breaker: Successfully recovered to CLOSED state');
     }
   }
 
   /**
    * 작업 실패 시 호출
    */
-  private onFailure(error: any): void {
+  private onFailure(error: Error | unknown): void {
     this.failedRequests++;
     this.failureCount++;
     this.lastFailureTime = Date.now();
     
-    this.logger.error(`Circuit Breaker: Request failed (${this.failureCount}/${this.options.failureThreshold})`, error.message);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    this.logger.error(`Circuit Breaker: Request failed (${this.failureCount}/${this.options.failureThreshold})`, errorMessage);
     
     if (this.failureCount >= this.options.failureThreshold) {
       this.state = CircuitBreakerState.OPEN;
