@@ -1,9 +1,22 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import compression from 'compression';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  
+  // Enable gzip compression for better performance
+  app.use(compression({
+    filter: (req, res) => {
+      if (req.headers['x-no-compression']) {
+        return false;
+      }
+      return true;
+    },
+    threshold: 1024, // Only compress responses > 1KB
+    level: 6, // Compression level (1-9, 6 is good balance)
+  }));
   
   // Global validation pipe
   app.useGlobalPipes(new ValidationPipe());

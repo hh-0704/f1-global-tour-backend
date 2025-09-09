@@ -11,6 +11,7 @@ import { IntervalsModule } from './modules/intervals/intervals.module';
 import { CarDataModule } from './modules/car-data/car-data.module';
 import { RaceControlModule } from './modules/race-control/race-control.module';
 import { StintsModule } from './modules/stints/stints.module';
+import { HealthModule } from './modules/health/health.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import configuration from './config/configuration';
 
@@ -28,6 +29,7 @@ import configuration from './config/configuration';
     CarDataModule,
     RaceControlModule,
     StintsModule,
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [

@@ -30,8 +30,9 @@ export class CacheService {
       password: redisPassword || undefined,
     });
 
-    this.client.on('error', (err) => {
-      this.logger.error('Redis Client Error', err);
+    // Suppress Redis error logging to avoid spam when Redis is not available
+    this.client.on('error', () => {
+      // Silent fail - Redis errors are handled gracefully in methods
     });
 
     this.client.on('connect', () => {
@@ -45,7 +46,7 @@ export class CacheService {
     try {
       await this.client.connect();
     } catch (error) {
-      this.logger.error('Failed to connect to Redis:', error);
+      this.logger.warn('Redis not available - running without cache');
       // Don't throw error - allow app to run without Redis
     }
   }
