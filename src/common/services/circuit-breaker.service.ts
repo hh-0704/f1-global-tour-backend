@@ -17,7 +17,7 @@ export interface CircuitBreakerStats {
   failureCount: number;
   lastFailureTime: number | null;
   totalRequests: number;
-  successfulRequests: number;
+successfulRequests: number;
   failedRequests: number;
 }
 
@@ -38,10 +38,7 @@ export class CircuitBreakerService {
     monitoringPeriod: 10000  // 10초
   };
 
-  constructor(options?: Partial<CircuitBreakerOptions>) {
-    if (options) {
-      this.options = { ...this.options, ...options };
-    }
+  constructor() {
     this.logger.log(`Circuit Breaker initialized with options: ${JSON.stringify(this.options)}`);
   }
 
