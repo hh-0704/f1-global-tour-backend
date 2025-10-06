@@ -9,10 +9,11 @@ F1 Global Tour의 리플레이 모드에서 필요한 백엔드 API 명세서입
 - [인증](#인증)
 - [공통 응답 형식](#공통-응답-형식)
 - [세션 관리 API](#세션-관리-api)
+- [드라이버 정보 API](#드라이버-정보-api)
+- [타이어 전략 API (Stints)](#타이어-전략-api-stints)
 - [드라이버 타이밍 API](#드라이버-타이밍-api)
 - [텔레메트리 데이터 API](#텔레메트리-데이터-api)
 - [플래그 상태 API](#플래그-상태-api)
-- [랩 데이터 API](#랩-데이터-api)
 - [실시간 업데이트 API](#실시간-업데이트-api)
 - [데이터 변환 로직](#데이터-변환-로직)
 - [캐싱 전략](#캐싱-전략)
@@ -180,19 +181,64 @@ Authorization: Bearer {api_key}
 }
 ```
 
+## 드라이버 정보 API
+
+### 드라이버 목록 및 상세 정보
+
+**OpenF1 소스**: `GET https://api.openf1.org/v1/drivers?session_key={sessionKey}`
+
+**Backend Endpoints**:
+- `GET /api/v1/drivers/session/{sessionKey}` - 세션의 모든 드라이버 목록
+- `GET /api/v1/drivers/session/{sessionKey}/driver/{driverNumber}/info` - 특정 드라이버 상세 정보
+- `GET /api/v1/drivers/session/{sessionKey}/driver/{driverNumber}/telemetry` - 특정 드라이버 텔레메트리 (dateStart, dateEnd 쿼리 파라미터)
+- `GET /api/v1/drivers/session/{sessionKey}/driver/{driverNumber}/laps` - 특정 드라이버 랩 데이터 (lapNumber 쿼리 파라미터로 필터 가능)
+
+**매개변수**:
+- `sessionKey` (required): 세션 식별자
+- `driverNumber` (optional): 드라이버 번호
+- `dateStart`, `dateEnd` (optional): 시간 범위 필터
+- `lapNumber` (optional): 특정 랩 필터
+
+## 타이어 전략 API (Stints)
+
+### 타이어 전략 및 피트스톱 정보
+
+**OpenF1 소스**: `GET https://api.openf1.org/v1/stints?session_key={sessionKey}`
+
+**Backend Endpoints**:
+- `GET /api/v1/stints/session/{sessionKey}` - 세션의 모든 스틴트 정보
+- `GET /api/v1/stints/session/{sessionKey}/driver/{driverNumber}` - 특정 드라이버 스틴트 정보
+- `GET /api/v1/stints/session/{sessionKey}/tire-strategy` - 타이어 전략 분석
+- `GET /api/v1/stints/session/{sessionKey}/pit-stops` - 피트스톱 정보 (driverNumber 쿼리 파라미터로 필터 가능)
+- `GET /api/v1/stints/session/{sessionKey}/tire-performance` - 타이어 성능 분석 (compound 쿼리 파라미터로 필터 가능)
+- `GET /api/v1/stints/session/{sessionKey}/stint-comparison?driver1={num1}&driver2={num2}` - 드라이버 간 스틴트 비교
+- `GET /api/v1/stints/session/{sessionKey}/tire-degradation` - 타이어 마모 분석 (driverNumber 쿼리 파라미터로 필터 가능)
+
+**매개변수**:
+- `sessionKey` (required): 세션 식별자
+- `driverNumber` (optional): 특정 드라이버 필터
+- `compound` (optional): 타이어 컴파운드 필터 (SOFT, MEDIUM, HARD, INTERMEDIATE, WET)
+- `driver1`, `driver2` (required for comparison): 비교할 드라이버 번호들
+
 ## 드라이버 타이밍 API
 
 ### 1. 드라이버 인터벌 정보 (4초 간격 업데이트)
 
 **OpenF1 소스**: `GET https://api.openf1.org/v1/intervals?session_key={sessionKey}`
 
-**Backend Endpoint**: `GET /api/v1/sessions/{sessionKey}/intervals`
+**Backend Endpoint**: `GET /api/v1/intervals/session/{sessionKey}`
 
 **매개변수**:
 - `sessionKey` (required): 세션 식별자
 - `date` (optional): 특정 시점 데이터 조회
 
 **주요 특징**: OpenF1 intervals API는 레이스 중에만 사용 가능하며, 약 4초마다 업데이트됩니다.
+
+**추가 엔드포인트**:
+- `GET /api/v1/intervals/session/{sessionKey}/live` - 최신 실시간 인터벌
+- `GET /api/v1/intervals/session/{sessionKey}/standings` - 현재 순위
+- `GET /api/v1/intervals/session/{sessionKey}/driver/{driverNumber}/gaps` - 특정 드라이버 갭 정보
+- `GET /api/v1/intervals/session/{sessionKey}/history` - 인터벌 히스토리 (startDate, endDate 쿼리 파라미터)
 
 **응답**:
 ```json
@@ -241,15 +287,22 @@ Authorization: Bearer {api_key}
 }
 ```
 
-### 2. 특정 랩의 드라이버 랩 타임 정보
+### 2. 랩 데이터 API
 
 **OpenF1 소스**: `GET https://api.openf1.org/v1/laps?session_key={sessionKey}&lap_number={lapNumber}`
 
-**Backend Endpoint**: `GET /api/v1/sessions/{sessionKey}/laps/{lapNumber}`
+**Backend Endpoints**:
+- `GET /api/v1/laps/session/{sessionKey}` - 세션의 모든 랩 조회 (lapNumber 쿼리 파라미터로 필터 가능)
+- `GET /api/v1/laps/session/{sessionKey}/lap/{lapNumber}` - 특정 랩 상세 조회
+- `GET /api/v1/laps/session/{sessionKey}/driver/{driverNumber}` - 특정 드라이버의 랩 데이터 (lapNumber 쿼리 파라미터로 필터 가능)
+- `GET /api/v1/laps/session/{sessionKey}/fastest` - 가장 빠른 랩들 조회 (limit 쿼리 파라미터)
+- `GET /api/v1/laps/session/{sessionKey}/analysis` - 랩 분석 데이터
 
 **매개변수**:
 - `sessionKey` (required): 세션 식별자
-- `lapNumber` (required): 조회할 랩 번호
+- `lapNumber` (optional): 조회할 랩 번호
+- `driverNumber` (optional): 드라이버 번호
+- `limit` (optional): 결과 제한
 
 **주요 특징**: 랩 완주시에만 데이터 제공, segments 데이터로 미니섹터 성능 계산 가능
 
@@ -295,13 +348,20 @@ Authorization: Bearer {api_key}
 
 **OpenF1 소스**: `GET https://api.openf1.org/v1/car_data?driver_number={driverNumber}&session_key={sessionKey}`
 
-**Backend Endpoint**: `GET /api/v1/sessions/{sessionKey}/car-data/{driverNumber}`
+**Backend Endpoints**:
+- `GET /api/v1/car-data/session/{sessionKey}/driver/{driverNumber}` - 특정 드라이버 텔레메트리
+- `GET /api/v1/car-data/session/{sessionKey}/telemetry` - 세션 전체 텔레메트리 (drivers 쿼리 파라미터로 필터 가능)
+- `GET /api/v1/car-data/session/{sessionKey}/driver/{driverNumber}/speed-analysis` - 속도 분석
+- `GET /api/v1/car-data/session/{sessionKey}/driver/{driverNumber}/gear-analysis` - 기어 분석
+- `GET /api/v1/car-data/session/{sessionKey}/driver/{driverNumber}/drs-usage` - DRS 사용 분석
+- `GET /api/v1/car-data/session/{sessionKey}/comparison?driver1={num1}&driver2={num2}` - 드라이버 비교
 
 **매개변수**:
-- `sessionKey` (required): 세션 식별자  
-- `driverNumber` (required): 드라이버 번호
-- `date_start` (optional): 시작 시간 필터
-- `date_end` (optional): 종료 시간 필터
+- `sessionKey` (required): 세션 식별자
+- `driverNumber` (required/optional): 드라이버 번호
+- `date` (optional): 특정 시점 데이터 조회
+- `drivers` (optional): 쉼표로 구분된 드라이버 번호 목록 (예: "1,16,44")
+- `driver1`, `driver2` (required for comparison): 비교할 드라이버 번호들
 
 **주요 특징**: 약 3.7Hz 샘플링 레이트, DRS 값은 FastF1 해석 테이블 참조
 
@@ -328,31 +388,6 @@ Authorization: Bearer {api_key}
 }
 ```
 
-### 2. 드라이버별 텔레메트리 히스토리
-
-**Endpoint**: `GET /api/replay/sessions/{sessionKey}/telemetry/history/{driverNumber}?fromLap={start}&toLap={end}`
-
-**응답**:
-```json
-{
-  "success": true,
-  "data": {
-    "driverNumber": 1,
-    "telemetryHistory": [
-      {
-        "lapNumber": 1,
-        "timestamp": "2024-03-15T10:30:00.000Z",
-        "speed": 285.5,
-        "gear": 7,
-        "throttle": 85.2,
-        "brake": 0.0,
-        "drsEnabled": true,
-        "drsAvailable": true
-      }
-    ]
-  }
-}
-```
 
 ## 플래그 상태 API
 
@@ -360,17 +395,26 @@ Authorization: Bearer {api_key}
 
 **OpenF1 소스**: `GET https://api.openf1.org/v1/race_control?session_key={sessionKey}`
 
-**Backend Endpoint**: `GET /api/v1/sessions/{sessionKey}/race-control`
+**Backend Endpoints**:
+- `GET /api/v1/race-control/session/{sessionKey}` - 레이스 컨트롤 전체 정보
+- `GET /api/v1/race-control/session/{sessionKey}/flags` - 플래그 정보
+- `GET /api/v1/race-control/session/{sessionKey}/incidents` - 사고 정보
+- `GET /api/v1/race-control/session/{sessionKey}/safety-car` - 세이프티카 기간 정보
+- `GET /api/v1/race-control/session/{sessionKey}/timeline` - 레이스 타임라인 (startDate, endDate 쿼리 파라미터)
+- `GET /api/v1/race-control/session/{sessionKey}/penalties` - 페널티 정보 (driverNumber 쿼리 파라미터로 필터 가능)
+- `GET /api/v1/race-control/session/{sessionKey}/drs-zones` - DRS 구역 정보
 
 **매개변수**:
 - `sessionKey` (required): 세션 식별자
-- `category` (optional): SafetyCar, Flag 등 카테고리 필터
+- `date` (optional): 특정 시점 데이터 조회
+- `driverNumber` (optional): 특정 드라이버 필터
+- `startDate`, `endDate` (optional): 시간 범위 필터
 
 **필터링 대상**: VSC, SC, RED FLAG 관련 메시지만 프론트엔드로 전달
 
 **주요 메시지 타입**:
 - `VIRTUAL SAFETY CAR DEPLOYED` / `VIRTUAL SAFETY CAR ENDING`
-- `SAFETY CAR DEPLOYED` / `SAFETY CAR IN THIS LAP` 
+- `SAFETY CAR DEPLOYED` / `SAFETY CAR IN THIS LAP`
 - `RED FLAG` / `TRACK CLEAR`
 
 **응답**:
@@ -405,128 +449,7 @@ Authorization: Bearer {api_key}
 }
 ```
 
-### 2. 세션별 플래그 히스토리
 
-**Endpoint**: `GET /api/replay/sessions/{sessionKey}/flags/history`
-
-**응답**:
-```json
-{
-  "success": true,
-  "data": {
-    "sessionType": "RACE",
-    "totalLaps": 78,
-    "flagEvents": [
-      {
-        "eventId": "flag_001",
-        "flagType": "SC",
-        "startLap": 3,
-        "endLap": 4,
-        "startTime": "2024-03-15T10:35:00.000Z",
-        "endTime": "2024-03-15T10:38:00.000Z",
-        "reason": "Debris on track",
-        "sector": 2
-      },
-      {
-        "eventId": "flag_002", 
-        "flagType": "RED",
-        "startLap": 15,
-        "endLap": 18,
-        "startTime": "2024-03-15T10:55:00.000Z",
-        "endTime": "2024-03-15T11:05:00.000Z",
-        "reason": "Heavy rain conditions",
-        "sector": null
-      }
-    ],
-    "statistics": {
-      "totalSafetyCarLaps": 2,
-      "totalVSCLaps": 0,
-      "totalRedFlagTime": 600,
-      "greenFlagPercentage": 85.4
-    }
-  }
-}
-```
-
-## 랩 데이터 API
-
-### 1. 특정 랩의 상세 데이터
-
-**Endpoint**: `GET /api/replay/sessions/{sessionKey}/laps/{lapNumber}`
-
-**응답**:
-```json
-{
-  "success": true,
-  "data": {
-    "lapNumber": 1,
-    "lapData": [
-      {
-        "driverNumber": 1,
-        "lapDuration": 72.456,
-        "sectorTimes": {
-          "sector1": 14.123,
-          "sector2": 37.789,
-          "sector3": 20.544
-        },
-        "segments": {
-          "sector1": [2048, 2048, 0, 2048, 2048, 0, 2048, 2048],
-          "sector2": [2051, 2051, 2048, 2048, 0, 2048, 2048, 2049],
-          "sector3": [2048, 0, 2048, 2048, 2048, 2048, 2049, 2048]
-        },
-        "speeds": {
-          "i1Speed": 185.5,
-          "i2Speed": 190.2,
-          "stSpeed": 195.8
-        },
-        "isPitOutLap": false,
-        "isPitInLap": false,
-        "tireCompound": "SOFT",
-        "tireAge": 1
-      }
-    ]
-  }
-}
-```
-
-### 2. 랩별 인터벌 데이터
-
-**Endpoint**: `GET /api/replay/sessions/{sessionKey}/intervals/{lapNumber}`
-
-**응답**:
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "driverNumber": 1,
-      "position": 1,
-      "gapToLeader": null,
-      "intervalToAhead": null,
-      "totalTime": 72.456,
-      "isRetired": false
-    },
-    {
-      "driverNumber": 16,
-      "position": 2,
-      "gapToLeader": 0.123,
-      "intervalToAhead": 0.123,
-      "totalTime": 72.579,
-      "isRetired": false
-    },
-    {
-      "driverNumber": 20,
-      "position": 20,
-      "gapToLeader": null,
-      "intervalToAhead": null,
-      "totalTime": 17.456,
-      "isRetired": true,
-      "retiredLap": 1,
-      "retiredReason": "Engine failure"
-    }
-  ]
-}
-```
 
 ## 실시간 업데이트 API
 
@@ -630,25 +553,34 @@ const convertIntervalsToDriverTiming = (intervals: OpenF1Interval[], laps: OpenF
 };
 ```
 
-#### 2. Car Data → Telemetry  
+#### 2. Car Data → Telemetry
 ```typescript
 // OpenF1 car_data를 텔레메트리로 변환
 const convertCarDataToTelemetry = (carData: OpenF1CarData[]) => {
-  // drs: 8,10,12,14 → enabled: true
-  // drs: 0,1 → enabled: false
-  // throttle, brake 값 직접 매핑
+  // DRS 변환 (F1TransformationsUtil.transformDRS 사용):
+  // - drs: 0, 1 → { enabled: false, available: false }
+  // - drs: 8 → { enabled: false, available: true }
+  // - drs: 10, 12, 14 → { enabled: true, available: true }
+  // - throttle, brake 값 직접 매핑
+  // - gear (n_gear), speed, rpm 직접 매핑
 };
+
+// 실제 구현은 F1TransformationsUtil.transformCarData() 사용
 ```
 
 #### 3. Segments → MiniSector Performance
 ```typescript
 // OpenF1 segments를 미니섹터 성능으로 변환
 const convertSegmentsToMiniSector = (segments: number[]) => {
-  // 2051 → "fastest" (purple)
-  // 0 → "personal_best" (green)  
-  // 2048 → "normal" (yellow)
-  // 2049 → "slow" (red)
+  // 0 → "neutral" (not available)
+  // 2048 → "neutral" (yellow sector)
+  // 2049 → "best" (green sector)
+  // 2051 → "personal_best" (purple sector)
+  // 2064 → "pit" (pit lane)
 };
+
+// 실제 구현은 F1TransformationsUtil.transformSegments() 사용
+// 반환 타입: SectorPerformance = 'personal_best' | 'best' | 'neutral' | 'pit'
 ```
 
 #### 4. Stints → TireInfo
@@ -671,22 +603,46 @@ const convertStintsToTireInfo = (stints: OpenF1Stint[], currentLap: number) => {
 ```typescript
 const CACHE_STRATEGY = {
   // 변경되지 않는 데이터 - 장기간 캐싱
-  sessionData: "60분",     // 세션 메타데이터
-  driverData: "30분",      // 드라이버 목록
-  
+  sessions: 3600,          // 세션 메타데이터 (1시간)
+  drivers: 1800,           // 드라이버 목록 (30분)
+  stints: 1800,            // 타이어 전략 (30분)
+
   // 실시간/준실시간 데이터 - 단기간 캐싱
-  intervals: "4초",        // 드라이버 인터벌
-  carData: "실시간 처리",   // 텔레메트리 데이터
-  lapData: "랩완주시",      // 랩 데이터
-  raceControl: "즉시"      // 플래그 정보
+  laps: 900,               // 랩 데이터 (15분)
+  intervals: 300,          // 드라이버 인터벌 (5분)
+  carData: 600,            // 텔레메트리 데이터 (10분)
+  raceControl: 300,        // 플래그/레이스 컨트롤 (5분)
 };
 ```
 
+**참고**: TTL 값은 초 단위이며, `CacheService`에서 모듈별로 다른 TTL을 적용합니다.
+
 ### 캐시 키 전략
-- `session:{sessionKey}:metadata`
-- `session:{sessionKey}:drivers`
-- `session:{sessionKey}:intervals:latest`
-- `session:{sessionKey}:car_data:{driverNumber}:latest`
+
+실제 구현에서 사용하는 캐시 키 패턴:
+
+```typescript
+// CacheService의 키 생성 메서드 사용
+generateSessionKey(sessionKey, dataType)
+  → `session:{sessionKey}:{dataType}`
+
+generateDriverKey(sessionKey, driverNumber, dataType)
+  → `session:{sessionKey}:driver:{driverNumber}:{dataType}`
+
+generateLapKey(sessionKey, lapNumber?)
+  → `session:{sessionKey}:lap:{lapNumber}` 또는 `session:{sessionKey}:laps`
+```
+
+**예시**:
+- `session:9472:drivers` - 세션 9472의 드라이버 목록
+- `session:9472:laps` - 세션 9472의 모든 랩 데이터
+- `session:9472:intervals` - 세션 9472의 인터벌 데이터
+- `session:9472:driver:44:laps` - 세션 9472에서 44번 드라이버의 랩 데이터
+- `session:9472:lap:15` - 세션 9472의 15번째 랩 데이터
+- `session:9472:race_control` - 세션 9472의 레이스 컨트롤 데이터
+
+**캐시 무효화**:
+- `clearSessionCache(sessionKey)` - 특정 세션의 모든 캐시 삭제 (`session:{sessionKey}:*` 패턴)
 
 ## 에러 처리
 
@@ -764,22 +720,25 @@ interface DriverTiming {
 
 OpenF1 segments 배열을 프론트엔드 miniSector 성능 표시로 변환:
 
-| OpenF1 코드 | 의미 | 프론트엔드 값 | UI 색상 |
-|-------------|------|---------------|---------|
-| `2051` | Purple sector | `"fastest"` | Purple |
-| `0` | Personal best | `"personal_best"` | Green |
-| `2048` | Yellow sector | `"normal"` | Yellow |
-| `2049` | Green sector | `"slow"` | Red |
-| `2064` | Pit lane | `"none"` | Gray (특수 처리) |
-| `null`/빈값 | No data/Retired | `"none"` | Gray |
+| OpenF1 코드 | 의미 | 성능 값 | UI 색상 |
+|-------------|------|---------|---------|
+| `0` | Not available | `"neutral"` | None |
+| `2048` | Yellow sector | `"neutral"` | Yellow |
+| `2049` | Green sector | `"best"` | Green |
+| `2051` | Purple sector | `"personal_best"` | Purple |
+| `2064` | Pit lane | `"pit"` | Gray (특수 처리) |
+| `null`/빈값 | No data/Retired | `"neutral"` | Gray |
+
+**참고**: 실제 구현에서는 `SectorPerformance` 타입으로 `'personal_best' | 'best' | 'neutral' | 'pit'` 값을 사용합니다.
 
 ### OpenF1 DRS 값 해석 (FastF1 기준)
 
-| DRS 값 | 해석 | 프론트엔드 값 |
-|--------|------|---------------|
-| `0`, `1` | DRS off | `enabled: false` |
-| `8` | Detected, eligible | `available: true, enabled: false` |
-| `10`, `12`, `14` | DRS on | `enabled: true` |
+| DRS 값 | 해석 | 변환 값 |
+|--------|------|---------|
+| `0`, `1` | DRS not available | `{ enabled: false, available: false }` |
+| `8` | DRS available but not enabled | `{ enabled: false, available: true }` |
+| `10`, `12`, `14` | DRS enabled and available | `{ enabled: true, available: true }` |
+| `null` | No data | `{ enabled: false, available: false }` |
 
 ### 타이어 컴파운드
 ```typescript
