@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import compression from 'compression';
 import { AppModule } from './app.module';
 
@@ -33,11 +34,27 @@ async function bootstrap() {
   // API prefix
   app.setGlobalPrefix('api/v1');
 
+  // Swagger configuration
+  const config = new DocumentBuilder()
+    .setTitle('F1 Global Tour API')
+    .setDescription('NestJS-based API server for F1 replay functionality with OpenF1 API integration')
+    .setVersion('1.0')
+    .addTag('sessions', 'Session management and replay initialization')
+    .addTag('drivers', 'Driver information and standings')
+    .addTag('laps', 'Lap data and fastest laps')
+    .addTag('intervals', 'Timing gaps and live intervals')
+    .addTag('car-data', 'Telemetry data (speed, throttle, brake, DRS)')
+    .addTag('race-control', 'Flags, safety car, and race events')
+    .addTag('stints', 'Tire strategy and pit stops')
+    .build();
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api/docs', app, document);
+
   const port = process.env.PORT || 4000;
   await app.listen(port);
 
   console.log(`🏎️  F1 Global Tour Backend is running on port ${port}`);
-  console.log(`📊 API Documentation: http://localhost:${port}/api/v1`);
+  console.log(`📊 API Documentation: http://localhost:${port}/api/docs`);
 }
 
 bootstrap();
