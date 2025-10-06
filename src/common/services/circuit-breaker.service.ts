@@ -1,15 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 
 export enum CircuitBreakerState {
-  CLOSED = 'CLOSED',     // 정상 동작
-  OPEN = 'OPEN',         // 차단 상태 (요청 차단)
-  HALF_OPEN = 'HALF_OPEN' // 반개방 상태 (테스트 요청)
+  CLOSED = 'CLOSED', // 정상 동작
+  OPEN = 'OPEN', // 차단 상태 (요청 차단)
+  HALF_OPEN = 'HALF_OPEN', // 반개방 상태 (테스트 요청)
 }
 
 export interface CircuitBreakerOptions {
-  failureThreshold: number;    // 실패 임계값 (기본: 5회)
-  recoveryTimeout: number;     // 복구 시도 시간 (기본: 30초)
-  monitoringPeriod: number;    // 모니터링 주기 (기본: 10초)
+  failureThreshold: number; // 실패 임계값 (기본: 5회)
+  recoveryTimeout: number; // 복구 시도 시간 (기본: 30초)
+  monitoringPeriod: number; // 모니터링 주기 (기본: 10초)
 }
 
 export interface CircuitBreakerStats {
@@ -17,29 +17,31 @@ export interface CircuitBreakerStats {
   failureCount: number;
   lastFailureTime: number | null;
   totalRequests: number;
-successfulRequests: number;
+  successfulRequests: number;
   failedRequests: number;
 }
 
 @Injectable()
 export class CircuitBreakerService {
   private readonly logger = new Logger(CircuitBreakerService.name);
-  
+
   private state: CircuitBreakerState = CircuitBreakerState.CLOSED;
   private failureCount = 0;
   private lastFailureTime: number | null = null;
   private totalRequests = 0;
   private successfulRequests = 0;
   private failedRequests = 0;
-  
+
   private readonly options: CircuitBreakerOptions = {
     failureThreshold: 5,
     recoveryTimeout: 30000, // 30초
-    monitoringPeriod: 10000  // 10초
+    monitoringPeriod: 10000, // 10초
   };
 
   constructor() {
-    this.logger.log(`Circuit Breaker initialized with options: ${JSON.stringify(this.options)}`);
+    this.logger.log(
+      `Circuit Breaker initialized with options: ${JSON.stringify(this.options)}`,
+    );
   }
 
   /**
@@ -47,10 +49,7 @@ export class CircuitBreakerService {
    * @param operation - 실행할 비동기 작업
    * @param fallbackData - 차단 시 반환할 대체 데이터
    */
-  async execute<T>(
-    operation: () => Promise<T>,
-    fallbackData?: T
-  ): Promise<T> {
+  async execute<T>(operation: () => Promise<T>, fallbackData?: T): Promise<T> {
     this.totalRequests++;
 
     // OPEN 상태: 요청 차단
@@ -63,7 +62,9 @@ export class CircuitBreakerService {
         if (fallbackData !== undefined) {
           return fallbackData;
         }
-        throw new Error('Circuit Breaker is OPEN - Service temporarily unavailable');
+        throw new Error(
+          'Circuit Breaker is OPEN - Service temporarily unavailable',
+        );
       }
     }
 
@@ -73,13 +74,18 @@ export class CircuitBreakerService {
       return result;
     } catch (error) {
       this.onFailure(error);
-      
+
       // fallback 데이터가 있고 실패 임계값에 도달했으면 반환
-      if (fallbackData !== undefined && this.failureCount >= this.options.failureThreshold) {
-        this.logger.log('Circuit Breaker: Returning fallback data due to excessive failures');
+      if (
+        fallbackData !== undefined &&
+        this.failureCount >= this.options.failureThreshold
+      ) {
+        this.logger.log(
+          'Circuit Breaker: Returning fallback data due to excessive failures',
+        );
         return fallbackData;
       }
-      
+
       throw error;
     }
   }
@@ -90,10 +96,12 @@ export class CircuitBreakerService {
   private onSuccess(): void {
     this.successfulRequests++;
     this.failureCount = 0;
-    
+
     if (this.state === CircuitBreakerState.HALF_OPEN) {
       this.state = CircuitBreakerState.CLOSED;
-      this.logger.log('Circuit Breaker: Successfully recovered to CLOSED state');
+      this.logger.log(
+        'Circuit Breaker: Successfully recovered to CLOSED state',
+      );
     }
   }
 
@@ -104,10 +112,14 @@ export class CircuitBreakerService {
     this.failedRequests++;
     this.failureCount++;
     this.lastFailureTime = Date.now();
-    
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    this.logger.error(`Circuit Breaker: Request failed (${this.failureCount}/${this.options.failureThreshold})`, errorMessage);
-    
+
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    this.logger.error(
+      `Circuit Breaker: Request failed (${this.failureCount}/${this.options.failureThreshold})`,
+      errorMessage,
+    );
+
     if (this.failureCount >= this.options.failureThreshold) {
       this.state = CircuitBreakerState.OPEN;
       this.logger.error('Circuit Breaker: Opened due to excessive failures');
@@ -119,7 +131,7 @@ export class CircuitBreakerService {
    */
   private shouldAttemptRecovery(): boolean {
     if (!this.lastFailureTime) return false;
-    
+
     const timeSinceLastFailure = Date.now() - this.lastFailureTime;
     return timeSinceLastFailure >= this.options.recoveryTimeout;
   }
@@ -134,7 +146,7 @@ export class CircuitBreakerService {
       lastFailureTime: this.lastFailureTime,
       totalRequests: this.totalRequests,
       successfulRequests: this.successfulRequests,
-      failedRequests: this.failedRequests
+      failedRequests: this.failedRequests,
     };
   }
 
@@ -148,7 +160,7 @@ export class CircuitBreakerService {
     this.totalRequests = 0;
     this.successfulRequests = 0;
     this.failedRequests = 0;
-    
+
     this.logger.log('Circuit Breaker: Manually reset to CLOSED state');
   }
 
@@ -163,6 +175,8 @@ export class CircuitBreakerService {
    * 요청 가능 여부 확인
    */
   canExecute(): boolean {
-    return this.state !== CircuitBreakerState.OPEN || this.shouldAttemptRecovery();
+    return (
+      this.state !== CircuitBreakerState.OPEN || this.shouldAttemptRecovery()
+    );
   }
 }

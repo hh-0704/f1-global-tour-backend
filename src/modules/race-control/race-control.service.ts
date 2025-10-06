@@ -15,15 +15,25 @@ export class RaceControlService {
         ...(date && { date }),
       };
 
-      this.logger.debug(`Fetching race control messages for session ${sessionKey}`);
-      const raceControlData = await this.cachedOpenf1Client.fetchRaceControl(params);
+      this.logger.debug(
+        `Fetching race control messages for session ${sessionKey}`,
+      );
+      const raceControlData =
+        await this.cachedOpenf1Client.fetchRaceControl(params);
 
-      const transformedData = raceControlData.map(message => this.transformRaceControlMessage(message));
-      
+      const transformedData = raceControlData.map((message) =>
+        this.transformRaceControlMessage(message),
+      );
+
       // Sort by timestamp
-      transformedData.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      transformedData.sort(
+        (a, b) =>
+          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+      );
 
-      this.logger.log(`Retrieved ${transformedData.length} race control messages for session ${sessionKey}`);
+      this.logger.log(
+        `Retrieved ${transformedData.length} race control messages for session ${sessionKey}`,
+      );
       return {
         sessionKey,
         totalMessages: transformedData.length,
@@ -47,10 +57,13 @@ export class RaceControlService {
   async getFlags(sessionKey: number, date?: string) {
     try {
       this.logger.debug(`Fetching flag information for session ${sessionKey}`);
-      const raceControlData = await this.getSessionRaceControl(sessionKey, date);
+      const raceControlData = await this.getSessionRaceControl(
+        sessionKey,
+        date,
+      );
 
-      const flagMessages = raceControlData.messages.filter(message => 
-        this.isFlag(message.message)
+      const flagMessages = raceControlData.messages.filter((message) =>
+        this.isFlag(message.message),
       );
 
       const flagPeriods = this.analyzeFlagPeriods(flagMessages);
@@ -79,16 +92,23 @@ export class RaceControlService {
 
   async getIncidents(sessionKey: number, date?: string) {
     try {
-      this.logger.debug(`Fetching incident information for session ${sessionKey}`);
-      const raceControlData = await this.getSessionRaceControl(sessionKey, date);
+      this.logger.debug(
+        `Fetching incident information for session ${sessionKey}`,
+      );
+      const raceControlData = await this.getSessionRaceControl(
+        sessionKey,
+        date,
+      );
 
-      const incidentMessages = raceControlData.messages.filter(message =>
-        this.isIncident(message.message)
+      const incidentMessages = raceControlData.messages.filter((message) =>
+        this.isIncident(message.message),
       );
 
       const categorizedIncidents = this.categorizeIncidents(incidentMessages);
 
-      this.logger.log(`Found ${incidentMessages.length} incident-related messages`);
+      this.logger.log(
+        `Found ${incidentMessages.length} incident-related messages`,
+      );
       return {
         sessionKey,
         totalIncidents: incidentMessages.length,
@@ -112,23 +132,37 @@ export class RaceControlService {
 
   async getSafetyCarPeriods(sessionKey: number, date?: string) {
     try {
-      this.logger.debug(`Analyzing safety car periods for session ${sessionKey}`);
-      const raceControlData = await this.getSessionRaceControl(sessionKey, date);
+      this.logger.debug(
+        `Analyzing safety car periods for session ${sessionKey}`,
+      );
+      const raceControlData = await this.getSessionRaceControl(
+        sessionKey,
+        date,
+      );
 
-      const safetyCarMessages = raceControlData.messages.filter(message =>
-        this.isSafetyCarMessage(message.message)
+      const safetyCarMessages = raceControlData.messages.filter((message) =>
+        this.isSafetyCarMessage(message.message),
       );
 
       const safetyCarPeriods = this.analyzeSafetyCarPeriods(safetyCarMessages);
-      const virtualSafetyCarPeriods = this.analyzeVirtualSafetyCarPeriods(safetyCarMessages);
+      const virtualSafetyCarPeriods =
+        this.analyzeVirtualSafetyCarPeriods(safetyCarMessages);
 
-      this.logger.log(`Found ${safetyCarPeriods.length} safety car periods and ${virtualSafetyCarPeriods.length} VSC periods`);
+      this.logger.log(
+        `Found ${safetyCarPeriods.length} safety car periods and ${virtualSafetyCarPeriods.length} VSC periods`,
+      );
       return {
         sessionKey,
         safetyCarPeriods,
         virtualSafetyCarPeriods,
-        totalSafetyCarTime: safetyCarPeriods.reduce((total, period: any) => total + (period.duration || 0), 0),
-        totalVSCTime: virtualSafetyCarPeriods.reduce((total, period: any) => total + (period.duration || 0), 0),
+        totalSafetyCarTime: safetyCarPeriods.reduce(
+          (total, period: any) => total + (period.duration || 0),
+          0,
+        ),
+        totalVSCTime: virtualSafetyCarPeriods.reduce(
+          (total, period: any) => total + (period.duration || 0),
+          0,
+        ),
         messages: safetyCarMessages,
       };
     } catch (error) {
@@ -145,7 +179,11 @@ export class RaceControlService {
     }
   }
 
-  async getRaceTimeline(sessionKey: number, startDate?: string, endDate?: string) {
+  async getRaceTimeline(
+    sessionKey: number,
+    startDate?: string,
+    endDate?: string,
+  ) {
     try {
       this.logger.debug(`Creating race timeline for session ${sessionKey}`);
       const raceControlData = await this.getSessionRaceControl(sessionKey);
@@ -154,16 +192,16 @@ export class RaceControlService {
 
       // Filter by date range if provided
       if (startDate || endDate) {
-        filteredMessages = raceControlData.messages.filter(message => {
+        filteredMessages = raceControlData.messages.filter((message) => {
           const messageTime = new Date(message.timestamp).getTime();
           const start = startDate ? new Date(startDate).getTime() : 0;
           const end = endDate ? new Date(endDate).getTime() : Date.now();
-          
+
           return messageTime >= start && messageTime <= end;
         });
       }
 
-      const timeline = filteredMessages.map(message => ({
+      const timeline = filteredMessages.map((message) => ({
         timestamp: message.timestamp,
         type: this.categorizeMessage(message.message),
         message: message.message,
@@ -176,12 +214,22 @@ export class RaceControlService {
       // Group by time intervals (e.g., every 5 minutes)
       const timeGroups = this.groupTimelineByInterval(timeline, 5 * 60 * 1000); // 5 minutes
 
-      this.logger.log(`Created timeline with ${timeline.length} events in ${Object.keys(timeGroups).length} time intervals`);
+      this.logger.log(
+        `Created timeline with ${timeline.length} events in ${Object.keys(timeGroups).length} time intervals`,
+      );
       return {
         sessionKey,
         dateRange: {
-          start: startDate || (filteredMessages.length > 0 ? filteredMessages[0].timestamp : null),
-          end: endDate || (filteredMessages.length > 0 ? filteredMessages[filteredMessages.length - 1].timestamp : null),
+          start:
+            startDate ||
+            (filteredMessages.length > 0
+              ? filteredMessages[0].timestamp
+              : null),
+          end:
+            endDate ||
+            (filteredMessages.length > 0
+              ? filteredMessages[filteredMessages.length - 1].timestamp
+              : null),
         },
         totalEvents: timeline.length,
         timeline,
@@ -204,21 +252,24 @@ export class RaceControlService {
 
   async getPenalties(sessionKey: number, driverNumber?: number) {
     try {
-      this.logger.debug(`Fetching penalty information for session ${sessionKey}${driverNumber ? ` and driver ${driverNumber}` : ''}`);
+      this.logger.debug(
+        `Fetching penalty information for session ${sessionKey}${driverNumber ? ` and driver ${driverNumber}` : ''}`,
+      );
       const raceControlData = await this.getSessionRaceControl(sessionKey);
 
-      let penaltyMessages = raceControlData.messages.filter(message =>
-        this.isPenalty(message.message)
+      let penaltyMessages = raceControlData.messages.filter((message) =>
+        this.isPenalty(message.message),
       );
 
       if (driverNumber) {
-        penaltyMessages = penaltyMessages.filter(message =>
-          message.message.includes(driverNumber.toString()) ||
-          message.message.includes(`CAR ${driverNumber}`)
+        penaltyMessages = penaltyMessages.filter(
+          (message) =>
+            message.message.includes(driverNumber.toString()) ||
+            message.message.includes(`CAR ${driverNumber}`),
         );
       }
 
-      const penalties = penaltyMessages.map(message => ({
+      const penalties = penaltyMessages.map((message) => ({
         ...message,
         penaltyType: this.extractPenaltyType(message.message),
         penaltyReason: this.extractPenaltyReason(message.message),
@@ -255,8 +306,8 @@ export class RaceControlService {
       this.logger.debug(`Analyzing DRS zones for session ${sessionKey}`);
       const raceControlData = await this.getSessionRaceControl(sessionKey);
 
-      const drsMessages = raceControlData.messages.filter(message =>
-        this.isDRSMessage(message.message)
+      const drsMessages = raceControlData.messages.filter((message) =>
+        this.isDRSMessage(message.message),
       );
 
       const drsZones = this.analyzeDRSZones(drsMessages);
@@ -301,15 +352,22 @@ export class RaceControlService {
   }
 
   private generateRaceControlSummary(messages: any[]) {
-    const categories = messages.reduce((counts, message) => {
-      const category = message.category;
-      counts[category] = (counts[category] || 0) + 1;
-      return counts;
-    }, {} as Record<string, number>);
+    const categories = messages.reduce(
+      (counts, message) => {
+        const category = message.category;
+        counts[category] = (counts[category] || 0) + 1;
+        return counts;
+      },
+      {} as Record<string, number>,
+    );
 
-    const flagCount = messages.filter(m => this.isFlag(m.message)).length;
-    const incidentCount = messages.filter(m => this.isIncident(m.message)).length;
-    const penaltyCount = messages.filter(m => this.isPenalty(m.message)).length;
+    const flagCount = messages.filter((m) => this.isFlag(m.message)).length;
+    const incidentCount = messages.filter((m) =>
+      this.isIncident(m.message),
+    ).length;
+    const penaltyCount = messages.filter((m) =>
+      this.isPenalty(m.message),
+    ).length;
 
     return {
       totalMessages: messages.length,
@@ -317,48 +375,89 @@ export class RaceControlService {
       flagMessages: flagCount,
       incidentMessages: incidentCount,
       penaltyMessages: penaltyCount,
-      timeSpan: messages.length > 0 ? {
-        start: messages[0].timestamp,
-        end: messages[messages.length - 1].timestamp,
-      } : null,
+      timeSpan:
+        messages.length > 0
+          ? {
+              start: messages[0].timestamp,
+              end: messages[messages.length - 1].timestamp,
+            }
+          : null,
     };
   }
 
   private isFlag(message: string): boolean {
     const flagKeywords = [
-      'YELLOW FLAG', 'RED FLAG', 'GREEN FLAG', 'CHEQUERED FLAG',
-      'BLUE FLAG', 'BLACK FLAG', 'WHITE FLAG', 'TRACK CLEAR'
+      'YELLOW FLAG',
+      'RED FLAG',
+      'GREEN FLAG',
+      'CHEQUERED FLAG',
+      'BLUE FLAG',
+      'BLACK FLAG',
+      'WHITE FLAG',
+      'TRACK CLEAR',
     ];
-    return flagKeywords.some(keyword => message.toUpperCase().includes(keyword));
+    return flagKeywords.some((keyword) =>
+      message.toUpperCase().includes(keyword),
+    );
   }
 
   private isIncident(message: string): boolean {
     const incidentKeywords = [
-      'INCIDENT', 'COLLISION', 'SPIN', 'OFF TRACK', 'CRASH',
-      'CONTACT', 'DEBRIS', 'ACCIDENT'
+      'INCIDENT',
+      'COLLISION',
+      'SPIN',
+      'OFF TRACK',
+      'CRASH',
+      'CONTACT',
+      'DEBRIS',
+      'ACCIDENT',
     ];
-    return incidentKeywords.some(keyword => message.toUpperCase().includes(keyword));
+    return incidentKeywords.some((keyword) =>
+      message.toUpperCase().includes(keyword),
+    );
   }
 
   private isSafetyCarMessage(message: string): boolean {
     const safetyCarKeywords = [
-      'SAFETY CAR', 'VIRTUAL SAFETY CAR', 'VSC', 'SC DEPLOYED',
-      'SC IN', 'VSC DEPLOYED', 'VSC ENDING'
+      'SAFETY CAR',
+      'VIRTUAL SAFETY CAR',
+      'VSC',
+      'SC DEPLOYED',
+      'SC IN',
+      'VSC DEPLOYED',
+      'VSC ENDING',
     ];
-    return safetyCarKeywords.some(keyword => message.toUpperCase().includes(keyword));
+    return safetyCarKeywords.some((keyword) =>
+      message.toUpperCase().includes(keyword),
+    );
   }
 
   private isPenalty(message: string): boolean {
     const penaltyKeywords = [
-      'PENALTY', 'INVESTIGATION', 'REPRIMAND', 'GRID PENALTY',
-      'TIME PENALTY', 'STOP GO', 'DRIVE THROUGH', 'DISQUALIFIED'
+      'PENALTY',
+      'INVESTIGATION',
+      'REPRIMAND',
+      'GRID PENALTY',
+      'TIME PENALTY',
+      'STOP GO',
+      'DRIVE THROUGH',
+      'DISQUALIFIED',
     ];
-    return penaltyKeywords.some(keyword => message.toUpperCase().includes(keyword));
+    return penaltyKeywords.some((keyword) =>
+      message.toUpperCase().includes(keyword),
+    );
   }
 
   private isDRSMessage(message: string): boolean {
-    const drsKeywords = ['DRS', 'DRAG REDUCTION SYSTEM', 'DRS ENABLED', 'DRS DISABLED'];
-    return drsKeywords.some(keyword => message.toUpperCase().includes(keyword));
+    const drsKeywords = [
+      'DRS',
+      'DRAG REDUCTION SYSTEM',
+      'DRS ENABLED',
+      'DRS DISABLED',
+    ];
+    return drsKeywords.some((keyword) =>
+      message.toUpperCase().includes(keyword),
+    );
   }
 
   private categorizeMessage(message: string): string {
@@ -396,7 +495,7 @@ export class RaceControlService {
 
     for (const message of flagMessages) {
       const flagType = this.extractFlagType(message.message);
-      
+
       if (flagType && flagType !== currentFlag) {
         // End previous flag period
         if (currentFlag && flagStart) {
@@ -404,10 +503,12 @@ export class RaceControlService {
             flag: currentFlag,
             start: flagStart,
             end: message.timestamp,
-            duration: new Date(message.timestamp).getTime() - new Date(flagStart).getTime(),
+            duration:
+              new Date(message.timestamp).getTime() -
+              new Date(flagStart).getTime(),
           });
         }
-        
+
         // Start new flag period
         currentFlag = flagType;
         flagStart = message.timestamp;
@@ -418,51 +519,74 @@ export class RaceControlService {
   }
 
   private extractFlagType(message: string): string | null {
-    const flagTypes = ['YELLOW', 'RED', 'GREEN', 'CHEQUERED', 'BLUE', 'BLACK', 'WHITE'];
-    
+    const flagTypes = [
+      'YELLOW',
+      'RED',
+      'GREEN',
+      'CHEQUERED',
+      'BLUE',
+      'BLACK',
+      'WHITE',
+    ];
+
     for (const flag of flagTypes) {
       if (message.toUpperCase().includes(`${flag} FLAG`)) {
         return flag;
       }
     }
-    
+
     return null;
   }
 
   private generateFlagSummary(flagMessages: any[]) {
-    const flagCounts = flagMessages.reduce((counts, message) => {
-      const flagType = this.extractFlagType(message.message) || 'UNKNOWN';
-      counts[flagType] = (counts[flagType] || 0) + 1;
-      return counts;
-    }, {} as Record<string, number>);
+    const flagCounts = flagMessages.reduce(
+      (counts, message) => {
+        const flagType = this.extractFlagType(message.message) || 'UNKNOWN';
+        counts[flagType] = (counts[flagType] || 0) + 1;
+        return counts;
+      },
+      {} as Record<string, number>,
+    );
 
     return {
       totalFlagMessages: flagMessages.length,
       flagTypes: flagCounts,
-      mostCommonFlag: Object.entries(flagCounts).reduce((most, [flag, count]) => 
-        (count as number) > most.count ? { flag, count: count as number } : most,
-        { flag: 'NONE', count: 0 }
+      mostCommonFlag: Object.entries(flagCounts).reduce(
+        (most, [flag, count]) =>
+          (count as number) > most.count
+            ? { flag, count: count as number }
+            : most,
+        { flag: 'NONE', count: 0 },
       ),
     };
   }
 
   private categorizeIncidents(incidentMessages: any[]) {
     return {
-      collisions: incidentMessages.filter(m => m.message.toUpperCase().includes('COLLISION')),
-      spins: incidentMessages.filter(m => m.message.toUpperCase().includes('SPIN')),
-      offTrack: incidentMessages.filter(m => m.message.toUpperCase().includes('OFF TRACK')),
-      debris: incidentMessages.filter(m => m.message.toUpperCase().includes('DEBRIS')),
-      other: incidentMessages.filter(m => 
-        !m.message.toUpperCase().includes('COLLISION') &&
-        !m.message.toUpperCase().includes('SPIN') &&
-        !m.message.toUpperCase().includes('OFF TRACK') &&
-        !m.message.toUpperCase().includes('DEBRIS')
+      collisions: incidentMessages.filter((m) =>
+        m.message.toUpperCase().includes('COLLISION'),
+      ),
+      spins: incidentMessages.filter((m) =>
+        m.message.toUpperCase().includes('SPIN'),
+      ),
+      offTrack: incidentMessages.filter((m) =>
+        m.message.toUpperCase().includes('OFF TRACK'),
+      ),
+      debris: incidentMessages.filter((m) =>
+        m.message.toUpperCase().includes('DEBRIS'),
+      ),
+      other: incidentMessages.filter(
+        (m) =>
+          !m.message.toUpperCase().includes('COLLISION') &&
+          !m.message.toUpperCase().includes('SPIN') &&
+          !m.message.toUpperCase().includes('OFF TRACK') &&
+          !m.message.toUpperCase().includes('DEBRIS'),
       ),
     };
   }
 
   private createIncidentTimeline(incidentMessages: any[]) {
-    return incidentMessages.map(message => ({
+    return incidentMessages.map((message) => ({
       timestamp: message.timestamp,
       type: this.classifyIncident(message.message),
       message: message.message,
@@ -480,12 +604,16 @@ export class RaceControlService {
   }
 
   private assessIncidentSeverity(message: string): 'LOW' | 'MEDIUM' | 'HIGH' {
-    if (message.toUpperCase().includes('RED FLAG') || 
-        message.toUpperCase().includes('SAFETY CAR')) {
+    if (
+      message.toUpperCase().includes('RED FLAG') ||
+      message.toUpperCase().includes('SAFETY CAR')
+    ) {
       return 'HIGH';
     }
-    if (message.toUpperCase().includes('YELLOW FLAG') ||
-        message.toUpperCase().includes('INVESTIGATION')) {
+    if (
+      message.toUpperCase().includes('YELLOW FLAG') ||
+      message.toUpperCase().includes('INVESTIGATION')
+    ) {
       return 'MEDIUM';
     }
     return 'LOW';
@@ -497,20 +625,26 @@ export class RaceControlService {
     let deployTime: string | null = null;
 
     for (const message of messages) {
-      if (message.message.toUpperCase().includes('SAFETY CAR DEPLOYED') ||
-          message.message.toUpperCase().includes('SC DEPLOYED')) {
+      if (
+        message.message.toUpperCase().includes('SAFETY CAR DEPLOYED') ||
+        message.message.toUpperCase().includes('SC DEPLOYED')
+      ) {
         if (!scDeployed) {
           scDeployed = true;
           deployTime = message.timestamp;
         }
-      } else if (message.message.toUpperCase().includes('SAFETY CAR IN') ||
-                 message.message.toUpperCase().includes('SC IN')) {
+      } else if (
+        message.message.toUpperCase().includes('SAFETY CAR IN') ||
+        message.message.toUpperCase().includes('SC IN')
+      ) {
         if (scDeployed && deployTime) {
           periods.push({
             type: 'SAFETY_CAR',
             deployed: deployTime,
             recalled: message.timestamp,
-            duration: new Date(message.timestamp).getTime() - new Date(deployTime).getTime(),
+            duration:
+              new Date(message.timestamp).getTime() -
+              new Date(deployTime).getTime(),
           });
           scDeployed = false;
           deployTime = null;
@@ -527,20 +661,26 @@ export class RaceControlService {
     let deployTime: string | null = null;
 
     for (const message of messages) {
-      if (message.message.toUpperCase().includes('VIRTUAL SAFETY CAR') ||
-          message.message.toUpperCase().includes('VSC DEPLOYED')) {
+      if (
+        message.message.toUpperCase().includes('VIRTUAL SAFETY CAR') ||
+        message.message.toUpperCase().includes('VSC DEPLOYED')
+      ) {
         if (!vscDeployed) {
           vscDeployed = true;
           deployTime = message.timestamp;
         }
-      } else if (message.message.toUpperCase().includes('VSC ENDING') ||
-                 message.message.toUpperCase().includes('VSC ENDING')) {
+      } else if (
+        message.message.toUpperCase().includes('VSC ENDING') ||
+        message.message.toUpperCase().includes('VSC ENDING')
+      ) {
         if (vscDeployed && deployTime) {
           periods.push({
             type: 'VIRTUAL_SAFETY_CAR',
             deployed: deployTime,
             ended: message.timestamp,
-            duration: new Date(message.timestamp).getTime() - new Date(deployTime).getTime(),
+            duration:
+              new Date(message.timestamp).getTime() -
+              new Date(deployTime).getTime(),
           });
           vscDeployed = false;
           deployTime = null;
@@ -569,17 +709,25 @@ export class RaceControlService {
   }
 
   private getEventTypeSummary(timeline: any[]) {
-    return timeline.reduce((summary, event) => {
-      const type = event.type;
-      summary[type] = (summary[type] || 0) + 1;
-      return summary;
-    }, {} as Record<string, number>);
+    return timeline.reduce(
+      (summary, event) => {
+        const type = event.type;
+        summary[type] = (summary[type] || 0) + 1;
+        return summary;
+      },
+      {} as Record<string, number>,
+    );
   }
 
   private extractPenaltyType(message: string): string | null {
     const penaltyTypes = [
-      'GRID PENALTY', 'TIME PENALTY', 'STOP GO', 'DRIVE THROUGH',
-      'REPRIMAND', 'DISQUALIFIED', 'WARNING'
+      'GRID PENALTY',
+      'TIME PENALTY',
+      'STOP GO',
+      'DRIVE THROUGH',
+      'REPRIMAND',
+      'DISQUALIFIED',
+      'WARNING',
     ];
 
     for (const type of penaltyTypes) {
@@ -611,25 +759,37 @@ export class RaceControlService {
 
   private assessPenaltySeverity(message: string): 'LOW' | 'MEDIUM' | 'HIGH' {
     if (message.toUpperCase().includes('DISQUALIFIED')) return 'HIGH';
-    if (message.toUpperCase().includes('STOP GO') || 
-        message.toUpperCase().includes('DRIVE THROUGH')) return 'HIGH';
-    if (message.toUpperCase().includes('GRID PENALTY') ||
-        message.toUpperCase().includes('TIME PENALTY')) return 'MEDIUM';
+    if (
+      message.toUpperCase().includes('STOP GO') ||
+      message.toUpperCase().includes('DRIVE THROUGH')
+    )
+      return 'HIGH';
+    if (
+      message.toUpperCase().includes('GRID PENALTY') ||
+      message.toUpperCase().includes('TIME PENALTY')
+    )
+      return 'MEDIUM';
     return 'LOW';
   }
 
   private generatePenaltySummary(penalties: any[]) {
-    const typeCounts = penalties.reduce((counts, penalty) => {
-      const type = penalty.penaltyType || 'UNKNOWN';
-      counts[type] = (counts[type] || 0) + 1;
-      return counts;
-    }, {} as Record<string, number>);
+    const typeCounts = penalties.reduce(
+      (counts, penalty) => {
+        const type = penalty.penaltyType || 'UNKNOWN';
+        counts[type] = (counts[type] || 0) + 1;
+        return counts;
+      },
+      {} as Record<string, number>,
+    );
 
-    const severityCounts = penalties.reduce((counts, penalty) => {
-      const severity = penalty.severity;
-      counts[severity] = (counts[severity] || 0) + 1;
-      return counts;
-    }, {} as Record<string, number>);
+    const severityCounts = penalties.reduce(
+      (counts, penalty) => {
+        const severity = penalty.severity;
+        counts[severity] = (counts[severity] || 0) + 1;
+        return counts;
+      },
+      {} as Record<string, number>,
+    );
 
     return {
       totalPenalties: penalties.length,
@@ -641,8 +801,8 @@ export class RaceControlService {
   private analyzeDRSZones(drsMessages: any[]) {
     // This is a simplified implementation
     // In reality, you'd need track position data to accurately identify DRS zones
-    const enabledMessages = drsMessages.filter(m => 
-      m.message.toUpperCase().includes('DRS ENABLED')
+    const enabledMessages = drsMessages.filter((m) =>
+      m.message.toUpperCase().includes('DRS ENABLED'),
     );
 
     return enabledMessages.map((message, index) => ({
@@ -655,11 +815,11 @@ export class RaceControlService {
   private analyzeDRSActivations(drsMessages: any[]) {
     return {
       totalMessages: drsMessages.length,
-      enabledCount: drsMessages.filter(m => 
-        m.message.toUpperCase().includes('ENABLED')
+      enabledCount: drsMessages.filter((m) =>
+        m.message.toUpperCase().includes('ENABLED'),
       ).length,
-      disabledCount: drsMessages.filter(m => 
-        m.message.toUpperCase().includes('DISABLED')
+      disabledCount: drsMessages.filter((m) =>
+        m.message.toUpperCase().includes('DISABLED'),
       ).length,
     };
   }

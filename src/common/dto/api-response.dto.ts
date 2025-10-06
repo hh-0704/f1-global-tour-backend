@@ -8,7 +8,10 @@ export class ApiResponseDto<T> {
   };
   timestamp: string;
 
-  constructor(data?: T, error?: { code: string; message: string; details?: any }) {
+  constructor(
+    data?: T,
+    error?: { code: string; message: string; details?: any },
+  ) {
     this.success = !error;
     this.data = data;
     this.error = error;
@@ -19,7 +22,11 @@ export class ApiResponseDto<T> {
     return new ApiResponseDto(data);
   }
 
-  static error<T>(code: string, message: string, details?: any): ApiResponseDto<T> {
+  static error<T>(
+    code: string,
+    message: string,
+    details?: any,
+  ): ApiResponseDto<T> {
     return new ApiResponseDto<T>(undefined, { code, message, details });
   }
 }

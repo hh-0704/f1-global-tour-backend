@@ -32,7 +32,7 @@ export class CarDataController {
     @Query('drivers') drivers?: string,
   ): Promise<ApiResponseDto<any>> {
     const driverNumbers = drivers
-      ? drivers.split(',').map(num => parseInt(num.trim()))
+      ? drivers.split(',').map((num) => parseInt(num.trim()))
       : undefined;
 
     const telemetry = await this.carDataService.getSessionTelemetry(

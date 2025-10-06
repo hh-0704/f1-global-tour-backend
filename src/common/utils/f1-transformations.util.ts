@@ -8,12 +8,12 @@ export class F1TransformationsUtil {
    * Based on OpenF1 API documentation
    */
   private static readonly DRS_MAPPING = {
-    0: { enabled: false, available: false },   // DRS not available
-    1: { enabled: false, available: false },   // DRS not available (alternative)
-    8: { enabled: false, available: true },    // DRS available but not enabled
-    10: { enabled: true, available: true },    // DRS enabled and available
-    12: { enabled: true, available: true },    // DRS enabled and available (alternative)
-    14: { enabled: true, available: true },    // DRS enabled and available (alternative)
+    0: { enabled: false, available: false }, // DRS not available
+    1: { enabled: false, available: false }, // DRS not available (alternative)
+    8: { enabled: false, available: true }, // DRS available but not enabled
+    10: { enabled: true, available: true }, // DRS enabled and available
+    12: { enabled: true, available: true }, // DRS enabled and available (alternative)
+    14: { enabled: true, available: true }, // DRS enabled and available (alternative)
   } as const;
 
   /**
@@ -24,7 +24,11 @@ export class F1TransformationsUtil {
     0: { color: 'none', meaning: 'not available', performance: 'neutral' },
     2048: { color: 'yellow', meaning: 'yellow sector', performance: 'neutral' },
     2049: { color: 'green', meaning: 'green sector', performance: 'best' },
-    2051: { color: 'purple', meaning: 'purple sector', performance: 'personal_best' },
+    2051: {
+      color: 'purple',
+      meaning: 'purple sector',
+      performance: 'personal_best',
+    },
     2064: { color: 'pit', meaning: 'pitlane', performance: 'pit' },
   } as const;
 
@@ -38,11 +42,14 @@ export class F1TransformationsUtil {
    * @param drsValue - Raw DRS value from OpenF1 API
    * @returns Object with enabled and available boolean states
    */
-  static transformDRS(drsValue: number | null): { enabled: boolean; available: boolean } {
+  static transformDRS(drsValue: number | null): {
+    enabled: boolean;
+    available: boolean;
+  } {
     if (drsValue === null || drsValue === undefined) {
       return { enabled: false, available: false };
     }
-    
+
     return this.DRS_MAPPING[drsValue] || { enabled: false, available: false };
   }
 
@@ -56,13 +63,13 @@ export class F1TransformationsUtil {
       return [];
     }
 
-    return segments.map(segment => ({
+    return segments.map((segment) => ({
       value: segment,
-      ...this.SEGMENT_MAPPING[segment] || { 
-        color: 'unknown', 
-        meaning: 'unknown segment', 
-        performance: 'neutral' 
-      },
+      ...(this.SEGMENT_MAPPING[segment] || {
+        color: 'unknown',
+        meaning: 'unknown segment',
+        performance: 'neutral',
+      }),
     }));
   }
 
@@ -73,9 +80,9 @@ export class F1TransformationsUtil {
    */
   static detectPitLane(...segmentArrays: (number[] | null)[]): boolean {
     const allSegments = segmentArrays
-      .filter(segments => segments !== null && Array.isArray(segments))
+      .filter((segments) => segments !== null && Array.isArray(segments))
       .flat() as number[];
-    
+
     return allSegments.includes(this.PIT_SEGMENT_VALUE);
   }
 
@@ -83,18 +90,20 @@ export class F1TransformationsUtil {
    * Analyze sectors to detect pit out lap
    * Pit out laps typically have specific segment patterns
    * @param sector1 - Sector 1 segments
-   * @param sector2 - Sector 2 segments  
+   * @param sector2 - Sector 2 segments
    * @param sector3 - Sector 3 segments
    * @returns True if this appears to be a pit out lap
    */
   static detectPitOutLap(
-    sector1: number[] | null, 
-    sector2: number[] | null, 
-    sector3: number[] | null
+    sector1: number[] | null,
+    sector2: number[] | null,
+    sector3: number[] | null,
   ): boolean {
     // Pit out laps often have pit segments in sector 1 or early sectors
-    return this.detectPitLane(sector1) || 
-           (this.detectPitLane(sector2) && !this.detectPitLane(sector3));
+    return (
+      this.detectPitLane(sector1) ||
+      (this.detectPitLane(sector2) && !this.detectPitLane(sector3))
+    );
   }
 
   /**
@@ -102,24 +111,26 @@ export class F1TransformationsUtil {
    * @param segments - Segment array for a sector
    * @returns Best performance type found in the sector
    */
-  static analyzeSectorPerformance(segments: number[] | null): SectorPerformance {
+  static analyzeSectorPerformance(
+    segments: number[] | null,
+  ): SectorPerformance {
     if (!segments || !Array.isArray(segments)) {
       return 'neutral';
     }
 
     const transformedSegments = this.transformSegments(segments);
-    
+
     // Priority order: personal_best > best > neutral > pit
-    if (transformedSegments.some(s => s.performance === 'personal_best')) {
+    if (transformedSegments.some((s) => s.performance === 'personal_best')) {
       return 'personal_best';
     }
-    if (transformedSegments.some(s => s.performance === 'best')) {
+    if (transformedSegments.some((s) => s.performance === 'best')) {
       return 'best';
     }
-    if (transformedSegments.some(s => s.performance === 'pit')) {
+    if (transformedSegments.some((s) => s.performance === 'pit')) {
       return 'pit';
     }
-    
+
     return 'neutral';
   }
 
@@ -135,19 +146,21 @@ export class F1TransformationsUtil {
 
     const isPitLane = this.detectPitLane(
       lapData.segments_sector_1,
-      lapData.segments_sector_2, 
-      lapData.segments_sector_3
+      lapData.segments_sector_2,
+      lapData.segments_sector_3,
     );
 
     const isPitOutLap = this.detectPitOutLap(
       lapData.segments_sector_1,
       lapData.segments_sector_2,
-      lapData.segments_sector_3
+      lapData.segments_sector_3,
     );
 
     return {
       lapNumber: lapData.lap_number,
-      lapTime: lapData.lap_duration ? this.convertTimeToSeconds(lapData.lap_duration) : null,
+      lapTime: lapData.lap_duration
+        ? this.convertTimeToSeconds(lapData.lap_duration)
+        : null,
       sectors: {
         sector1: lapData.duration_sector_1,
         sector2: lapData.duration_sector_2,
@@ -226,8 +239,14 @@ export class F1TransformationsUtil {
    * @param timeString - Time string in various formats
    * @returns Time in seconds or null if invalid
    */
-  private static convertTimeToSeconds(timeString: string | null): number | null {
-    if (!timeString || timeString === '0:00:00' || timeString.includes('null')) {
+  private static convertTimeToSeconds(
+    timeString: string | null,
+  ): number | null {
+    if (
+      !timeString ||
+      timeString === '0:00:00' ||
+      timeString.includes('null')
+    ) {
       return null;
     }
 
@@ -239,7 +258,7 @@ export class F1TransformationsUtil {
         const seconds = parseFloat(parts[2]);
         return hours * 3600 + minutes * 60 + seconds;
       }
-      
+
       return parseFloat(timeString) || null;
     } catch {
       return null;

@@ -8,7 +8,11 @@ export class CarDataService {
 
   constructor(private readonly cachedOpenf1Client: CachedOpenF1ClientService) {}
 
-  async getDriverTelemetry(sessionKey: number, driverNumber: number, date?: string) {
+  async getDriverTelemetry(
+    sessionKey: number,
+    driverNumber: number,
+    date?: string,
+  ) {
     try {
       const params: CarDataQueryParams = {
         session_key: sessionKey,
@@ -16,12 +20,18 @@ export class CarDataService {
         ...(date && { date }),
       };
 
-      this.logger.debug(`Fetching telemetry for driver ${driverNumber} in session ${sessionKey}`);
+      this.logger.debug(
+        `Fetching telemetry for driver ${driverNumber} in session ${sessionKey}`,
+      );
       const carData = await this.cachedOpenf1Client.fetchCarData(params);
 
-      const transformedData = carData.map(data => this.transformCarData(data));
+      const transformedData = carData.map((data) =>
+        this.transformCarData(data),
+      );
 
-      this.logger.log(`Retrieved ${transformedData.length} telemetry points for driver ${driverNumber}`);
+      this.logger.log(
+        `Retrieved ${transformedData.length} telemetry points for driver ${driverNumber}`,
+      );
       return {
         sessionKey,
         driverNumber,
@@ -43,7 +53,11 @@ export class CarDataService {
     }
   }
 
-  async getSessionTelemetry(sessionKey: number, date?: string, driverNumbers?: number[]) {
+  async getSessionTelemetry(
+    sessionKey: number,
+    date?: string,
+    driverNumbers?: number[],
+  ) {
     try {
       this.logger.debug(`Fetching session telemetry for session ${sessionKey}`);
 
@@ -52,7 +66,11 @@ export class CarDataService {
       if (driverNumbers && driverNumbers.length > 0) {
         // Fetch telemetry for specific drivers
         for (const driverNumber of driverNumbers) {
-          const driverTelemetry = await this.getDriverTelemetry(sessionKey, driverNumber, date);
+          const driverTelemetry = await this.getDriverTelemetry(
+            sessionKey,
+            driverNumber,
+            date,
+          );
           allTelemetry.push(driverTelemetry);
         }
       } else {
@@ -60,26 +78,39 @@ export class CarDataService {
         // We need to fetch data without driver_number to get all drivers
         const lapsParams = { session_key: sessionKey };
         const lapsData = await this.cachedOpenf1Client.fetchLaps(lapsParams);
-        
+
         // Get unique driver numbers from laps data
-        const uniqueDrivers = [...new Set(lapsData.map(lap => lap.driver_number))];
-        
+        const uniqueDrivers = [
+          ...new Set(lapsData.map((lap) => lap.driver_number)),
+        ];
+
         // Fetch telemetry for each driver
         for (const driverNumber of uniqueDrivers) {
           try {
-            const driverTelemetry = await this.getDriverTelemetry(sessionKey, driverNumber, date);
+            const driverTelemetry = await this.getDriverTelemetry(
+              sessionKey,
+              driverNumber,
+              date,
+            );
             allTelemetry.push(driverTelemetry);
           } catch (error) {
-            this.logger.warn(`Could not fetch telemetry for driver ${driverNumber}: ${error.message}`);
+            this.logger.warn(
+              `Could not fetch telemetry for driver ${driverNumber}: ${error.message}`,
+            );
           }
         }
       }
 
-      this.logger.log(`Retrieved telemetry for ${allTelemetry.length} drivers in session ${sessionKey}`);
+      this.logger.log(
+        `Retrieved telemetry for ${allTelemetry.length} drivers in session ${sessionKey}`,
+      );
       return {
         sessionKey,
         driversCount: allTelemetry.length,
-        totalDataPoints: allTelemetry.reduce((sum, driver) => sum + driver.telemetryPoints, 0),
+        totalDataPoints: allTelemetry.reduce(
+          (sum, driver) => sum + driver.telemetryPoints,
+          0,
+        ),
         drivers: allTelemetry,
       };
     } catch (error) {
@@ -98,10 +129,17 @@ export class CarDataService {
 
   async getSpeedAnalysis(sessionKey: number, driverNumber: number) {
     try {
-      this.logger.debug(`Analyzing speed data for driver ${driverNumber} in session ${sessionKey}`);
-      
-      const telemetryData = await this.getDriverTelemetry(sessionKey, driverNumber);
-      const speedData = telemetryData.data.filter(point => point.speed !== null);
+      this.logger.debug(
+        `Analyzing speed data for driver ${driverNumber} in session ${sessionKey}`,
+      );
+
+      const telemetryData = await this.getDriverTelemetry(
+        sessionKey,
+        driverNumber,
+      );
+      const speedData = telemetryData.data.filter(
+        (point) => point.speed !== null,
+      );
 
       if (speedData.length === 0) {
         throw new HttpException(
@@ -110,17 +148,18 @@ export class CarDataService {
         );
       }
 
-      const speeds = speedData.map(point => point.speed);
+      const speeds = speedData.map((point) => point.speed);
       const analysis = {
         sessionKey,
         driverNumber,
         dataPoints: speedData.length,
         maxSpeed: Math.max(...speeds),
         minSpeed: Math.min(...speeds),
-        averageSpeed: speeds.reduce((sum, speed) => sum + speed, 0) / speeds.length,
+        averageSpeed:
+          speeds.reduce((sum, speed) => sum + speed, 0) / speeds.length,
         speedDistribution: this.calculateSpeedDistribution(speeds),
         topSpeeds: this.getTopSpeeds(speedData, 10),
-        speedByTime: speedData.map(point => ({
+        speedByTime: speedData.map((point) => ({
           timestamp: point.timestamp,
           speed: point.speed,
           rpm: point.rpm,
@@ -146,10 +185,17 @@ export class CarDataService {
 
   async getGearAnalysis(sessionKey: number, driverNumber: number) {
     try {
-      this.logger.debug(`Analyzing gear usage for driver ${driverNumber} in session ${sessionKey}`);
-      
-      const telemetryData = await this.getDriverTelemetry(sessionKey, driverNumber);
-      const gearData = telemetryData.data.filter(point => point.gear !== null);
+      this.logger.debug(
+        `Analyzing gear usage for driver ${driverNumber} in session ${sessionKey}`,
+      );
+
+      const telemetryData = await this.getDriverTelemetry(
+        sessionKey,
+        driverNumber,
+      );
+      const gearData = telemetryData.data.filter(
+        (point) => point.gear !== null,
+      );
 
       if (gearData.length === 0) {
         throw new HttpException(
@@ -170,8 +216,8 @@ export class CarDataService {
         upshifts: gearShifts.upshifts,
         downshifts: gearShifts.downshifts,
         averageShiftsPerMinute: gearShifts.shiftsPerMinute,
-        maxGear: Math.max(...gearData.map(point => point.gear)),
-        gearByTime: gearData.map(point => ({
+        maxGear: Math.max(...gearData.map((point) => point.gear)),
+        gearByTime: gearData.map((point) => ({
           timestamp: point.timestamp,
           gear: point.gear,
           speed: point.speed,
@@ -197,10 +243,15 @@ export class CarDataService {
 
   async getDRSUsage(sessionKey: number, driverNumber: number) {
     try {
-      this.logger.debug(`Analyzing DRS usage for driver ${driverNumber} in session ${sessionKey}`);
-      
-      const telemetryData = await this.getDriverTelemetry(sessionKey, driverNumber);
-      const drsData = telemetryData.data.filter(point => point.drs !== null);
+      this.logger.debug(
+        `Analyzing DRS usage for driver ${driverNumber} in session ${sessionKey}`,
+      );
+
+      const telemetryData = await this.getDriverTelemetry(
+        sessionKey,
+        driverNumber,
+      );
+      const drsData = telemetryData.data.filter((point) => point.drs !== null);
 
       if (drsData.length === 0) {
         throw new HttpException(
@@ -222,8 +273,8 @@ export class CarDataService {
         drsEfficiency: drsActivations.efficiency,
         drsZones: drsZones,
         drsTimeline: drsData
-          .filter(point => point.drs.enabled)
-          .map(point => ({
+          .filter((point) => point.drs.enabled)
+          .map((point) => ({
             timestamp: point.timestamp,
             speed: point.speed,
             duration: 0, // Duration would need to be calculated from data sequence
@@ -246,9 +297,16 @@ export class CarDataService {
     }
   }
 
-  async getDriverComparison(sessionKey: number, driver1: number, driver2: number, date?: string) {
+  async getDriverComparison(
+    sessionKey: number,
+    driver1: number,
+    driver2: number,
+    date?: string,
+  ) {
     try {
-      this.logger.debug(`Comparing drivers ${driver1} and ${driver2} in session ${sessionKey}`);
+      this.logger.debug(
+        `Comparing drivers ${driver1} and ${driver2} in session ${sessionKey}`,
+      );
 
       const [telemetry1, telemetry2] = await Promise.all([
         this.getDriverTelemetry(sessionKey, driver1, date),
@@ -265,13 +323,24 @@ export class CarDataService {
           driver1Points: telemetry1.telemetryPoints,
           driver2Points: telemetry2.telemetryPoints,
         },
-        speedComparison: this.compareDriverSpeeds(telemetry1.data, telemetry2.data),
-        gearComparison: this.compareDriverGears(telemetry1.data, telemetry2.data),
+        speedComparison: this.compareDriverSpeeds(
+          telemetry1.data,
+          telemetry2.data,
+        ),
+        gearComparison: this.compareDriverGears(
+          telemetry1.data,
+          telemetry2.data,
+        ),
         drsComparison: this.compareDriverDRS(telemetry1.data, telemetry2.data),
-        performanceGaps: this.calculatePerformanceGaps(telemetry1.data, telemetry2.data),
+        performanceGaps: this.calculatePerformanceGaps(
+          telemetry1.data,
+          telemetry2.data,
+        ),
       };
 
-      this.logger.log(`Generated comparison between drivers ${driver1} and ${driver2}`);
+      this.logger.log(
+        `Generated comparison between drivers ${driver1} and ${driver2}`,
+      );
       return comparison;
     } catch (error) {
       this.logger.error(`Error comparing drivers:`, error);
@@ -302,7 +371,10 @@ export class CarDataService {
     };
   }
 
-  private transformDRS(drsValue: number): { enabled: boolean; available: boolean } {
+  private transformDRS(drsValue: number): {
+    enabled: boolean;
+    available: boolean;
+  } {
     const DRS_MAPPING = {
       0: { enabled: false, available: false },
       1: { enabled: false, available: false },
@@ -315,10 +387,9 @@ export class CarDataService {
   }
 
   private generateTelemetrySummary(data: any[]) {
-    const validData = data.filter(point => 
-      point.speed !== null && 
-      point.rpm !== null && 
-      point.gear !== null
+    const validData = data.filter(
+      (point) =>
+        point.speed !== null && point.rpm !== null && point.gear !== null,
     );
 
     if (validData.length === 0) {
@@ -329,9 +400,9 @@ export class CarDataService {
       };
     }
 
-    const speeds = validData.map(point => point.speed);
-    const rpms = validData.map(point => point.rpm);
-    const gears = validData.map(point => point.gear);
+    const speeds = validData.map((point) => point.speed);
+    const rpms = validData.map((point) => point.rpm);
+    const gears = validData.map((point) => point.gear);
 
     return {
       dataPoints: data.length,
@@ -357,14 +428,17 @@ export class CarDataService {
   }
 
   private groupTelemetryByDriver(data: any[]) {
-    return data.reduce((groups, point) => {
-      const driver = point.driverNumber;
-      if (!groups[driver]) {
-        groups[driver] = [];
-      }
-      groups[driver].push(point);
-      return groups;
-    }, {} as Record<number, any[]>);
+    return data.reduce(
+      (groups, point) => {
+        const driver = point.driverNumber;
+        if (!groups[driver]) {
+          groups[driver] = [];
+        }
+        groups[driver].push(point);
+        return groups;
+      },
+      {} as Record<number, any[]>,
+    );
   }
 
   private calculateSpeedDistribution(speeds: number[]) {
@@ -375,10 +449,15 @@ export class CarDataService {
       { min: 300, max: 400, label: '300+ km/h' },
     ];
 
-    return ranges.map(range => ({
+    return ranges.map((range) => ({
       ...range,
-      count: speeds.filter(speed => speed >= range.min && speed < range.max).length,
-      percentage: (speeds.filter(speed => speed >= range.min && speed < range.max).length / speeds.length) * 100,
+      count: speeds.filter((speed) => speed >= range.min && speed < range.max)
+        .length,
+      percentage:
+        (speeds.filter((speed) => speed >= range.min && speed < range.max)
+          .length /
+          speeds.length) *
+        100,
     }));
   }
 
@@ -386,7 +465,7 @@ export class CarDataService {
     return speedData
       .sort((a, b) => b.speed - a.speed)
       .slice(0, count)
-      .map(point => ({
+      .map((point) => ({
         timestamp: point.timestamp,
         speed: point.speed,
         rpm: point.rpm,
@@ -395,11 +474,14 @@ export class CarDataService {
   }
 
   private calculateGearUsage(gearData: any[]) {
-    const gearCounts = gearData.reduce((counts, point) => {
-      const gear = point.gear;
-      counts[gear] = (counts[gear] || 0) + 1;
-      return counts;
-    }, {} as Record<number, number>);
+    const gearCounts = gearData.reduce(
+      (counts, point) => {
+        const gear = point.gear;
+        counts[gear] = (counts[gear] || 0) + 1;
+        return counts;
+      },
+      {} as Record<number, number>,
+    );
 
     const total = gearData.length;
 
@@ -429,9 +511,12 @@ export class CarDataService {
       }
     }
 
-    const durationMinutes = gearData.length > 0 ? 
-      (new Date(gearData[gearData.length - 1].timestamp).getTime() - 
-       new Date(gearData[0].timestamp).getTime()) / (1000 * 60) : 0;
+    const durationMinutes =
+      gearData.length > 0
+        ? (new Date(gearData[gearData.length - 1].timestamp).getTime() -
+            new Date(gearData[0].timestamp).getTime()) /
+          (1000 * 60)
+        : 0;
 
     return {
       totalShifts,
@@ -453,20 +538,27 @@ export class CarDataService {
         currentActivationStart = new Date(point.timestamp);
         activations++;
       } else if (!point.drs.enabled && currentActivationStart) {
-        const duration = new Date(point.timestamp).getTime() - currentActivationStart.getTime();
+        const duration =
+          new Date(point.timestamp).getTime() -
+          currentActivationStart.getTime();
         totalDuration += duration;
         activationDurations.push(duration);
         currentActivationStart = null;
       }
     }
 
-    const averageDuration = activationDurations.length > 0 
-      ? activationDurations.reduce((sum, dur) => sum + dur, 0) / activationDurations.length 
-      : 0;
+    const averageDuration =
+      activationDurations.length > 0
+        ? activationDurations.reduce((sum, dur) => sum + dur, 0) /
+          activationDurations.length
+        : 0;
 
-    const availableCount = drsData.filter(point => point.drs.available).length;
-    const enabledCount = drsData.filter(point => point.drs.enabled).length;
-    const efficiency = availableCount > 0 ? (enabledCount / availableCount) * 100 : 0;
+    const availableCount = drsData.filter(
+      (point) => point.drs.available,
+    ).length;
+    const enabledCount = drsData.filter((point) => point.drs.enabled).length;
+    const efficiency =
+      availableCount > 0 ? (enabledCount / availableCount) * 100 : 0;
 
     return {
       totalActivations: activations,
@@ -484,7 +576,7 @@ export class CarDataService {
 
     for (let i = 0; i < drsData.length; i++) {
       const point = drsData[i];
-      
+
       if (point.drs.available && currentZoneStart === null) {
         currentZoneStart = i;
       } else if (!point.drs.available && currentZoneStart !== null) {
@@ -501,21 +593,27 @@ export class CarDataService {
   }
 
   private getMostUsedGear(gears: number[]) {
-    const gearCounts = gears.reduce((counts, gear) => {
-      counts[gear] = (counts[gear] || 0) + 1;
-      return counts;
-    }, {} as Record<number, number>);
+    const gearCounts = gears.reduce(
+      (counts, gear) => {
+        counts[gear] = (counts[gear] || 0) + 1;
+        return counts;
+      },
+      {} as Record<number, number>,
+    );
 
-    return Object.entries(gearCounts).reduce((most, [gear, count]) => 
-      count > most.count ? { gear: parseInt(gear), count } : most,
-      { gear: 0, count: 0 }
+    return Object.entries(gearCounts).reduce(
+      (most, [gear, count]) =>
+        count > most.count ? { gear: parseInt(gear), count } : most,
+      { gear: 0, count: 0 },
     );
   }
 
   private calculateDRSUsageSummary(data: any[]) {
-    const drsData = data.filter(point => point.drs);
-    const availableCount = drsData.filter(point => point.drs.available).length;
-    const enabledCount = drsData.filter(point => point.drs.enabled).length;
+    const drsData = data.filter((point) => point.drs);
+    const availableCount = drsData.filter(
+      (point) => point.drs.available,
+    ).length;
+    const enabledCount = drsData.filter((point) => point.drs.enabled).length;
 
     return {
       totalDataPoints: drsData.length,
@@ -526,8 +624,12 @@ export class CarDataService {
   }
 
   private compareDriverSpeeds(driver1Data: any[], driver2Data: any[]) {
-    const speeds1 = driver1Data.filter(p => p.speed !== null).map(p => p.speed);
-    const speeds2 = driver2Data.filter(p => p.speed !== null).map(p => p.speed);
+    const speeds1 = driver1Data
+      .filter((p) => p.speed !== null)
+      .map((p) => p.speed);
+    const speeds2 = driver2Data
+      .filter((p) => p.speed !== null)
+      .map((p) => p.speed);
 
     if (speeds1.length === 0 || speeds2.length === 0) {
       return null;
@@ -536,25 +638,33 @@ export class CarDataService {
     return {
       driver1: {
         max: Math.max(...speeds1),
-        average: speeds1.reduce((sum, speed) => sum + speed, 0) / speeds1.length,
+        average:
+          speeds1.reduce((sum, speed) => sum + speed, 0) / speeds1.length,
       },
       driver2: {
         max: Math.max(...speeds2),
-        average: speeds2.reduce((sum, speed) => sum + speed, 0) / speeds2.length,
+        average:
+          speeds2.reduce((sum, speed) => sum + speed, 0) / speeds2.length,
       },
       advantage: {
-        maxSpeed: Math.max(...speeds1) > Math.max(...speeds2) ? 'driver1' : 'driver2',
-        averageSpeed: 
-          (speeds1.reduce((sum, speed) => sum + speed, 0) / speeds1.length) >
-          (speeds2.reduce((sum, speed) => sum + speed, 0) / speeds2.length) 
-            ? 'driver1' : 'driver2',
+        maxSpeed:
+          Math.max(...speeds1) > Math.max(...speeds2) ? 'driver1' : 'driver2',
+        averageSpeed:
+          speeds1.reduce((sum, speed) => sum + speed, 0) / speeds1.length >
+          speeds2.reduce((sum, speed) => sum + speed, 0) / speeds2.length
+            ? 'driver1'
+            : 'driver2',
       },
     };
   }
 
   private compareDriverGears(driver1Data: any[], driver2Data: any[]) {
-    const gears1 = driver1Data.filter(p => p.gear !== null).map(p => p.gear);
-    const gears2 = driver2Data.filter(p => p.gear !== null).map(p => p.gear);
+    const gears1 = driver1Data
+      .filter((p) => p.gear !== null)
+      .map((p) => p.gear);
+    const gears2 = driver2Data
+      .filter((p) => p.gear !== null)
+      .map((p) => p.gear);
 
     if (gears1.length === 0 || gears2.length === 0) {
       return null;
@@ -573,8 +683,8 @@ export class CarDataService {
   }
 
   private compareDriverDRS(driver1Data: any[], driver2Data: any[]) {
-    const drs1 = driver1Data.filter(p => p.drs);
-    const drs2 = driver2Data.filter(p => p.drs);
+    const drs1 = driver1Data.filter((p) => p.drs);
+    const drs2 = driver2Data.filter((p) => p.drs);
 
     if (drs1.length === 0 || drs2.length === 0) {
       return null;
@@ -593,21 +703,29 @@ export class CarDataService {
   private calculatePerformanceGaps(driver1Data: any[], driver2Data: any[]) {
     // This is a simplified performance gap calculation
     // In reality, you'd need to align data by time or track position
-    
-    const speeds1 = driver1Data.filter(p => p.speed !== null).map(p => p.speed);
-    const speeds2 = driver2Data.filter(p => p.speed !== null).map(p => p.speed);
-    
+
+    const speeds1 = driver1Data
+      .filter((p) => p.speed !== null)
+      .map((p) => p.speed);
+    const speeds2 = driver2Data
+      .filter((p) => p.speed !== null)
+      .map((p) => p.speed);
+
     if (speeds1.length === 0 || speeds2.length === 0) {
       return null;
     }
 
-    const avgSpeed1 = speeds1.reduce((sum, speed) => sum + speed, 0) / speeds1.length;
-    const avgSpeed2 = speeds2.reduce((sum, speed) => sum + speed, 0) / speeds2.length;
-    
+    const avgSpeed1 =
+      speeds1.reduce((sum, speed) => sum + speed, 0) / speeds1.length;
+    const avgSpeed2 =
+      speeds2.reduce((sum, speed) => sum + speed, 0) / speeds2.length;
+
     return {
       averageSpeedGap: Math.abs(avgSpeed1 - avgSpeed2),
       fasterDriver: avgSpeed1 > avgSpeed2 ? 'driver1' : 'driver2',
-      gapPercentage: Math.abs((avgSpeed1 - avgSpeed2) / Math.max(avgSpeed1, avgSpeed2)) * 100,
+      gapPercentage:
+        Math.abs((avgSpeed1 - avgSpeed2) / Math.max(avgSpeed1, avgSpeed2)) *
+        100,
     };
   }
 }

@@ -10,7 +10,7 @@ export abstract class BaseF1Service {
   protected readonly logger = new Logger(this.constructor.name);
 
   constructor(
-    protected readonly cachedOpenf1Client: CachedOpenF1ClientService
+    protected readonly cachedOpenf1Client: CachedOpenF1ClientService,
   ) {}
 
   /**
@@ -22,7 +22,7 @@ export abstract class BaseF1Service {
   protected async executeWithErrorHandling<T>(
     operation: () => Promise<T>,
     operationName: string,
-    context?: Record<string, any>
+    context?: Record<string, any>,
   ): Promise<T> {
     try {
       if (context) {
@@ -32,16 +32,16 @@ export abstract class BaseF1Service {
       }
 
       const result = await operation();
-      
+
       this.logger.log(`Successfully completed: ${operationName}`);
       return result;
     } catch (error) {
       this.logger.error(`Error ${operationName}:`, error);
-      
+
       if (error instanceof HttpException) {
         throw error;
       }
-      
+
       throw new HttpException(
         `Failed to ${operationName}`,
         HttpStatus.SERVICE_UNAVAILABLE,
@@ -54,10 +54,15 @@ export abstract class BaseF1Service {
    * @param sessionKey - Session to validate
    * @param dataType - Type of data being validated for better error messages
    */
-  protected async validateSession(sessionKey: number, dataType: string = 'data'): Promise<void> {
+  protected async validateSession(
+    sessionKey: number,
+    dataType: string = 'data',
+  ): Promise<void> {
     await this.executeWithErrorHandling(async () => {
-      const drivers = await this.cachedOpenf1Client.fetchDrivers({ session_key: sessionKey });
-      
+      const drivers = await this.cachedOpenf1Client.fetchDrivers({
+        session_key: sessionKey,
+      });
+
       if (drivers.length === 0) {
         throw new HttpException(
           `Session ${sessionKey} not found or has no ${dataType}`,
@@ -74,14 +79,14 @@ export abstract class BaseF1Service {
    * @param driverField - Field name that contains driver number (default: 'driverNumber')
    */
   protected filterByDriver<T>(
-    data: T[], 
-    driverNumber?: number, 
-    driverField: string = 'driverNumber'
+    data: T[],
+    driverNumber?: number,
+    driverField: string = 'driverNumber',
   ): T[] {
     if (!driverNumber) {
       return data;
     }
-    
+
     return data.filter((item: any) => item[driverField] === driverNumber);
   }
 
@@ -91,8 +96,8 @@ export abstract class BaseF1Service {
    * @param filterNulls - Whether to filter out null/undefined values
    */
   protected calculateStatistics(
-    values: (number | null)[], 
-    filterNulls: boolean = true
+    values: (number | null)[],
+    filterNulls: boolean = true,
   ): {
     count: number;
     min: number | null;
@@ -100,9 +105,9 @@ export abstract class BaseF1Service {
     average: number | null;
     sum: number | null;
   } {
-    const filteredValues = filterNulls 
+    const filteredValues = filterNulls
       ? values.filter((v): v is number => v !== null && v !== undefined)
-      : values as number[];
+      : (values as number[]);
 
     if (filteredValues.length === 0) {
       return {
@@ -115,7 +120,7 @@ export abstract class BaseF1Service {
     }
 
     const sum = filteredValues.reduce((acc, val) => acc + val, 0);
-    
+
     return {
       count: filteredValues.length,
       min: Math.min(...filteredValues),
@@ -131,14 +136,17 @@ export abstract class BaseF1Service {
    * @param groupByField - Field to group by
    */
   protected groupBy<T>(data: T[], groupByField: keyof T): Record<string, T[]> {
-    return data.reduce((groups, item) => {
-      const key = String(item[groupByField]);
-      if (!groups[key]) {
-        groups[key] = [];
-      }
-      groups[key].push(item);
-      return groups;
-    }, {} as Record<string, T[]>);
+    return data.reduce(
+      (groups, item) => {
+        const key = String(item[groupByField]);
+        if (!groups[key]) {
+          groups[key] = [];
+        }
+        groups[key].push(item);
+        return groups;
+      },
+      {} as Record<string, T[]>,
+    );
   }
 
   /**
@@ -146,7 +154,10 @@ export abstract class BaseF1Service {
    * @param data - Array to sort
    * @param timestampField - Field containing timestamp (default: 'timestamp')
    */
-  protected sortByTimestamp<T>(data: T[], timestampField: string = 'timestamp'): T[] {
+  protected sortByTimestamp<T>(
+    data: T[],
+    timestampField: string = 'timestamp',
+  ): T[] {
     return [...data].sort((a: any, b: any) => {
       const timeA = new Date(a[timestampField]).getTime();
       const timeB = new Date(b[timestampField]).getTime();
@@ -159,7 +170,11 @@ export abstract class BaseF1Service {
    * @param timeString - Time string in various formats
    */
   protected convertTimeToSeconds(timeString: string | null): number | null {
-    if (!timeString || timeString === '0:00:00' || timeString.includes('null')) {
+    if (
+      !timeString ||
+      timeString === '0:00:00' ||
+      timeString.includes('null')
+    ) {
       return null;
     }
 
@@ -171,7 +186,7 @@ export abstract class BaseF1Service {
         const seconds = parseFloat(parts[2]);
         return hours * 3600 + minutes * 60 + seconds;
       }
-      
+
       return parseFloat(timeString) || null;
     } catch {
       return null;
@@ -185,9 +200,9 @@ export abstract class BaseF1Service {
    * @param metadata - Additional metadata (optional)
    */
   protected createResponse<T>(
-    sessionKey: number, 
-    data: T, 
-    metadata?: Record<string, any>
+    sessionKey: number,
+    data: T,
+    metadata?: Record<string, any>,
   ): {
     sessionKey: number;
     data: T;

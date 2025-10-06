@@ -11,8 +11,11 @@ export class IntervalsController {
     @Param('sessionKey', ParseIntPipe) sessionKey: number,
     @Query('date') date?: string,
   ): Promise<ApiResponseDto<any>> {
-    const intervals = await this.intervalsService.getSessionIntervals(sessionKey, date);
-    
+    const intervals = await this.intervalsService.getSessionIntervals(
+      sessionKey,
+      date,
+    );
+
     return {
       success: true,
       data: intervals,
@@ -24,8 +27,9 @@ export class IntervalsController {
   async getLiveIntervals(
     @Param('sessionKey', ParseIntPipe) sessionKey: number,
   ): Promise<ApiResponseDto<any>> {
-    const liveIntervals = await this.intervalsService.getLiveIntervals(sessionKey);
-    
+    const liveIntervals =
+      await this.intervalsService.getLiveIntervals(sessionKey);
+
     return {
       success: true,
       data: liveIntervals,
@@ -38,8 +42,11 @@ export class IntervalsController {
     @Param('sessionKey', ParseIntPipe) sessionKey: number,
     @Query('date') date?: string,
   ): Promise<ApiResponseDto<any>> {
-    const standings = await this.intervalsService.getStandings(sessionKey, date);
-    
+    const standings = await this.intervalsService.getStandings(
+      sessionKey,
+      date,
+    );
+
     return {
       success: true,
       data: standings,
@@ -52,8 +59,11 @@ export class IntervalsController {
     @Param('sessionKey', ParseIntPipe) sessionKey: number,
     @Param('driverNumber', ParseIntPipe) driverNumber: number,
   ): Promise<ApiResponseDto<any>> {
-    const gaps = await this.intervalsService.getDriverGaps(sessionKey, driverNumber);
-    
+    const gaps = await this.intervalsService.getDriverGaps(
+      sessionKey,
+      driverNumber,
+    );
+
     return {
       success: true,
       data: gaps,
@@ -72,7 +82,7 @@ export class IntervalsController {
       startDate,
       endDate,
     );
-    
+
     return {
       success: true,
       data: history,

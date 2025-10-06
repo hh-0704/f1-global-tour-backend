@@ -22,7 +22,9 @@ export class SessionsController {
   @Get(':sessionKey/drivers')
   async getSessionDrivers(@Param('sessionKey') sessionKey: string) {
     try {
-      const drivers = await this.sessionsService.getSessionDrivers(Number(sessionKey));
+      const drivers = await this.sessionsService.getSessionDrivers(
+        Number(sessionKey),
+      );
       return ApiResponseDto.success(drivers);
     } catch (error) {
       throw error;

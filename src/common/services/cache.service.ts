@@ -18,9 +18,11 @@ export class CacheService {
   }
 
   private async initializeRedisClient() {
-    const redisHost = this.configService.get<string>('redis.host') || 'localhost';
+    const redisHost =
+      this.configService.get<string>('redis.host') || 'localhost';
     const redisPort = this.configService.get<number>('redis.port') || 6379;
-    const redisPassword = this.configService.get<string>('redis.password') || '';
+    const redisPassword =
+      this.configService.get<string>('redis.password') || '';
 
     this.client = createClient({
       socket: {
@@ -113,7 +115,9 @@ export class CacheService {
       const keys = await this.client.keys(pattern);
       if (keys.length > 0) {
         await this.client.del(keys);
-        this.logger.debug(`Cache DEL pattern: ${pattern} (${keys.length} keys)`);
+        this.logger.debug(
+          `Cache DEL pattern: ${pattern} (${keys.length} keys)`,
+        );
       }
     } catch (error) {
       this.logger.error(`Error deleting cache pattern ${pattern}:`, error);
@@ -153,7 +157,11 @@ export class CacheService {
     return `session:${sessionKey}:${dataType}`;
   }
 
-  generateDriverKey(sessionKey: number, driverNumber: number, dataType: string): string {
+  generateDriverKey(
+    sessionKey: number,
+    driverNumber: number,
+    dataType: string,
+  ): string {
     return `session:${sessionKey}:driver:${driverNumber}:${dataType}`;
   }
 
@@ -184,7 +192,7 @@ export class CacheService {
 
       const keyCount = await this.client.dbSize();
       const info = await this.client.info('memory');
-      
+
       return {
         connected: true,
         keyCount,
@@ -198,7 +206,9 @@ export class CacheService {
 
   private extractMemoryInfo(info: string): string {
     const lines = info.split('\r\n');
-    const memoryLine = lines.find(line => line.startsWith('used_memory_human:'));
+    const memoryLine = lines.find((line) =>
+      line.startsWith('used_memory_human:'),
+    );
     return memoryLine ? memoryLine.split(':')[1] : 'unknown';
   }
 

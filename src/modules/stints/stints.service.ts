@@ -1,6 +1,9 @@
 import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { CachedOpenF1ClientService } from '../../common/services/cached-openf1-client.service';
-import { StintsQueryParams, LapsQueryParams } from '../../common/interfaces/query-params.interface';
+import {
+  StintsQueryParams,
+  LapsQueryParams,
+} from '../../common/interfaces/query-params.interface';
 
 @Injectable()
 export class StintsService {
@@ -17,12 +20,16 @@ export class StintsService {
       this.logger.debug(`Fetching stints for session ${sessionKey}`);
       const stints = await this.cachedOpenf1Client.fetchStints(params);
 
-      const transformedStints = stints.map(stint => this.transformStintData(stint));
-      
+      const transformedStints = stints.map((stint) =>
+        this.transformStintData(stint),
+      );
+
       // Group by driver and sort
       const driverStints = this.groupStintsByDriver(transformedStints);
 
-      this.logger.log(`Retrieved ${transformedStints.length} stints for ${Object.keys(driverStints).length} drivers`);
+      this.logger.log(
+        `Retrieved ${transformedStints.length} stints for ${Object.keys(driverStints).length} drivers`,
+      );
       return {
         sessionKey,
         totalStints: transformedStints.length,
@@ -47,11 +54,13 @@ export class StintsService {
 
   async getDriverStints(sessionKey: number, driverNumber: number) {
     try {
-      this.logger.debug(`Fetching stints for driver ${driverNumber} in session ${sessionKey}`);
-      
+      this.logger.debug(
+        `Fetching stints for driver ${driverNumber} in session ${sessionKey}`,
+      );
+
       const sessionStints = await this.getSessionStints(sessionKey);
-      const driverStints = sessionStints.stints.filter(stint => 
-        stint.driverNumber === driverNumber
+      const driverStints = sessionStints.stints.filter(
+        (stint) => stint.driverNumber === driverNumber,
       );
 
       if (driverStints.length === 0) {
@@ -65,9 +74,15 @@ export class StintsService {
       driverStints.sort((a, b) => a.stintNumber - b.stintNumber);
 
       // Calculate stint performance metrics
-      const stintAnalysis = await this.analyzeDriverStints(sessionKey, driverNumber, driverStints);
+      const stintAnalysis = await this.analyzeDriverStints(
+        sessionKey,
+        driverNumber,
+        driverStints,
+      );
 
-      this.logger.log(`Retrieved ${driverStints.length} stints for driver ${driverNumber}`);
+      this.logger.log(
+        `Retrieved ${driverStints.length} stints for driver ${driverNumber}`,
+      );
       return {
         sessionKey,
         driverNumber,
@@ -93,11 +108,13 @@ export class StintsService {
   async getTireStrategy(sessionKey: number) {
     try {
       this.logger.debug(`Analyzing tire strategy for session ${sessionKey}`);
-      
+
       const sessionStints = await this.getSessionStints(sessionKey);
       const strategies = this.analyzeAllTireStrategies(sessionStints.stints);
 
-      this.logger.log(`Analyzed tire strategies for ${Object.keys(strategies.driverStrategies).length} drivers`);
+      this.logger.log(
+        `Analyzed tire strategies for ${Object.keys(strategies.driverStrategies).length} drivers`,
+      );
       return {
         sessionKey,
         strategies,
@@ -120,13 +137,15 @@ export class StintsService {
 
   async getPitStops(sessionKey: number, driverNumber?: number) {
     try {
-      this.logger.debug(`Analyzing pit stops for session ${sessionKey}${driverNumber ? ` and driver ${driverNumber}` : ''}`);
-      
+      this.logger.debug(
+        `Analyzing pit stops for session ${sessionKey}${driverNumber ? ` and driver ${driverNumber}` : ''}`,
+      );
+
       const sessionStints = await this.getSessionStints(sessionKey);
       let stints = sessionStints.stints;
 
       if (driverNumber) {
-        stints = stints.filter(stint => stint.driverNumber === driverNumber);
+        stints = stints.filter((stint) => stint.driverNumber === driverNumber);
       }
 
       const pitStops = this.extractPitStops(stints);
@@ -157,17 +176,22 @@ export class StintsService {
 
   async getTirePerformance(sessionKey: number, compound?: string) {
     try {
-      this.logger.debug(`Analyzing tire performance for session ${sessionKey}${compound ? ` and compound ${compound}` : ''}`);
-      
+      this.logger.debug(
+        `Analyzing tire performance for session ${sessionKey}${compound ? ` and compound ${compound}` : ''}`,
+      );
+
       const sessionStints = await this.getSessionStints(sessionKey);
       let stints = sessionStints.stints;
 
       if (compound) {
-        stints = stints.filter(stint => stint.tireCompound === compound);
+        stints = stints.filter((stint) => stint.tireCompound === compound);
       }
 
       // Get lap data to analyze performance
-      const performanceData = await this.analyzeTirePerformanceData(sessionKey, stints);
+      const performanceData = await this.analyzeTirePerformanceData(
+        sessionKey,
+        stints,
+      );
 
       this.logger.log(`Analyzed tire performance for ${stints.length} stints`);
       return {
@@ -176,7 +200,9 @@ export class StintsService {
         totalStints: stints.length,
         performance: performanceData,
         degradationAnalysis: this.analyzeTireDegradationFromStints(stints),
-        compoundComparison: compound ? null : this.compareCompoundPerformance(sessionStints.stints),
+        compoundComparison: compound
+          ? null
+          : this.compareCompoundPerformance(sessionStints.stints),
       };
     } catch (error) {
       this.logger.error(`Error analyzing tire performance:`, error);
@@ -192,10 +218,16 @@ export class StintsService {
     }
   }
 
-  async getStintComparison(sessionKey: number, driver1: number, driver2: number) {
+  async getStintComparison(
+    sessionKey: number,
+    driver1: number,
+    driver2: number,
+  ) {
     try {
-      this.logger.debug(`Comparing stints between drivers ${driver1} and ${driver2} in session ${sessionKey}`);
-      
+      this.logger.debug(
+        `Comparing stints between drivers ${driver1} and ${driver2} in session ${sessionKey}`,
+      );
+
       const [stints1, stints2] = await Promise.all([
         this.getDriverStints(sessionKey, driver1),
         this.getDriverStints(sessionKey, driver2),
@@ -203,13 +235,21 @@ export class StintsService {
 
       const comparison = this.compareDriverStints(stints1, stints2);
 
-      this.logger.log(`Generated stint comparison between drivers ${driver1} and ${driver2}`);
+      this.logger.log(
+        `Generated stint comparison between drivers ${driver1} and ${driver2}`,
+      );
       return {
         sessionKey,
         drivers: { driver1, driver2 },
         comparison,
-        strategyDifferences: this.compareDriverStrategies(stints1.tireStrategy, stints2.tireStrategy),
-        performanceComparison: this.compareStintPerformance(stints1.stints, stints2.stints),
+        strategyDifferences: this.compareDriverStrategies(
+          stints1.tireStrategy,
+          stints2.tireStrategy,
+        ),
+        performanceComparison: this.compareStintPerformance(
+          stints1.stints,
+          stints2.stints,
+        ),
       };
     } catch (error) {
       this.logger.error(`Error comparing stints:`, error);
@@ -227,17 +267,22 @@ export class StintsService {
 
   async getTireDegradation(sessionKey: number, driverNumber?: number) {
     try {
-      this.logger.debug(`Analyzing tire degradation for session ${sessionKey}${driverNumber ? ` and driver ${driverNumber}` : ''}`);
-      
+      this.logger.debug(
+        `Analyzing tire degradation for session ${sessionKey}${driverNumber ? ` and driver ${driverNumber}` : ''}`,
+      );
+
       const sessionStints = await this.getSessionStints(sessionKey);
       let stints = sessionStints.stints;
 
       if (driverNumber) {
-        stints = stints.filter(stint => stint.driverNumber === driverNumber);
+        stints = stints.filter((stint) => stint.driverNumber === driverNumber);
       }
 
       // Get detailed lap times for degradation analysis
-      const degradationData = await this.analyzeTireDegradationDetailed(sessionKey, stints);
+      const degradationData = await this.analyzeTireDegradationDetailed(
+        sessionKey,
+        stints,
+      );
 
       this.logger.log(`Analyzed tire degradation for ${stints.length} stints`);
       return {
@@ -277,25 +322,34 @@ export class StintsService {
   }
 
   private groupStintsByDriver(stints: any[]) {
-    return stints.reduce((groups, stint) => {
-      const driver = stint.driverNumber;
-      if (!groups[driver]) {
-        groups[driver] = [];
-      }
-      groups[driver].push(stint);
-      groups[driver].sort((a, b) => a.stintNumber - b.stintNumber);
-      return groups;
-    }, {} as Record<number, any[]>);
+    return stints.reduce(
+      (groups, stint) => {
+        const driver = stint.driverNumber;
+        if (!groups[driver]) {
+          groups[driver] = [];
+        }
+        groups[driver].push(stint);
+        groups[driver].sort((a, b) => a.stintNumber - b.stintNumber);
+        return groups;
+      },
+      {} as Record<number, any[]>,
+    );
   }
 
   private generateSessionStintsSummary(stints: any[]) {
-    const compounds = [...new Set(stints.map(s => s.tireCompound))];
-    const driversCount = [...new Set(stints.map(s => s.driverNumber))].length;
-    
-    const compoundUsage = compounds.map(compound => ({
+    const compounds = [...new Set(stints.map((s) => s.tireCompound))];
+    const driversCount = [...new Set(stints.map((s) => s.driverNumber))].length;
+
+    const compoundUsage = compounds.map((compound) => ({
       compound,
-      stintCount: stints.filter(s => s.tireCompound === compound).length,
-      driversUsed: [...new Set(stints.filter(s => s.tireCompound === compound).map(s => s.driverNumber))].length,
+      stintCount: stints.filter((s) => s.tireCompound === compound).length,
+      driversUsed: [
+        ...new Set(
+          stints
+            .filter((s) => s.tireCompound === compound)
+            .map((s) => s.driverNumber),
+        ),
+      ].length,
     }));
 
     return {
@@ -303,39 +357,48 @@ export class StintsService {
       driversCount,
       compounds: compounds.length,
       compoundUsage,
-      averageStintLength: stints.reduce((sum, stint) => sum + stint.stintLength, 0) / stints.length,
-      longestStint: Math.max(...stints.map(s => s.stintLength)),
-      shortestStint: Math.min(...stints.map(s => s.stintLength)),
+      averageStintLength:
+        stints.reduce((sum, stint) => sum + stint.stintLength, 0) /
+        stints.length,
+      longestStint: Math.max(...stints.map((s) => s.stintLength)),
+      shortestStint: Math.min(...stints.map((s) => s.stintLength)),
     };
   }
 
-  private async analyzeDriverStints(sessionKey: number, driverNumber: number, stints: any[]) {
+  private async analyzeDriverStints(
+    sessionKey: number,
+    driverNumber: number,
+    stints: any[],
+  ) {
     try {
       // Get lap data for this driver to analyze stint performance
       const lapsParams: LapsQueryParams = {
         session_key: sessionKey,
         driver_number: driverNumber,
       };
-      
+
       const laps = await this.cachedOpenf1Client.fetchLaps(lapsParams);
-      
+
       return this.calculateStintPerformanceMetrics(stints, laps);
     } catch (error) {
-      this.logger.warn(`Could not fetch lap data for stint analysis: ${error.message}`);
+      this.logger.warn(
+        `Could not fetch lap data for stint analysis: ${error.message}`,
+      );
       return this.calculateBasicStintMetrics(stints);
     }
   }
 
   private calculateStintPerformanceMetrics(stints: any[], laps: any[]) {
-    return stints.map(stint => {
-      const stintLaps = laps.filter(lap => 
-        lap.lap_number >= stint.lapStart && lap.lap_number <= stint.lapEnd
+    return stints.map((stint) => {
+      const stintLaps = laps.filter(
+        (lap) =>
+          lap.lap_number >= stint.lapStart && lap.lap_number <= stint.lapEnd,
       );
 
       const validLapTimes = stintLaps
-        .map(lap => lap.lap_duration)
-        .filter(time => time !== null)
-        .map(time => this.convertTimeToSeconds(time));
+        .map((lap) => lap.lap_duration)
+        .filter((time) => time !== null)
+        .map((time) => this.convertTimeToSeconds(time));
 
       if (validLapTimes.length === 0) {
         return {
@@ -348,20 +411,33 @@ export class StintsService {
         };
       }
 
-      const averageLapTime = validLapTimes.reduce((sum, time) => sum + time, 0) / validLapTimes.length;
+      const averageLapTime =
+        validLapTimes.reduce((sum, time) => sum + time, 0) /
+        validLapTimes.length;
       const fastestLap = Math.min(...validLapTimes);
       const slowestLap = Math.max(...validLapTimes);
-      
+
       // Calculate consistency (standard deviation)
-      const variance = validLapTimes.reduce((sum, time) => sum + Math.pow(time - averageLapTime, 2), 0) / validLapTimes.length;
+      const variance =
+        validLapTimes.reduce(
+          (sum, time) => sum + Math.pow(time - averageLapTime, 2),
+          0,
+        ) / validLapTimes.length;
       const consistency = Math.sqrt(variance);
 
       // Calculate degradation (difference between first and last few laps)
-      const firstLaps = validLapTimes.slice(0, Math.min(3, Math.floor(validLapTimes.length / 3)));
-      const lastLaps = validLapTimes.slice(-Math.min(3, Math.floor(validLapTimes.length / 3)));
-      
-      const firstAvg = firstLaps.reduce((sum, time) => sum + time, 0) / firstLaps.length;
-      const lastAvg = lastLaps.reduce((sum, time) => sum + time, 0) / lastLaps.length;
+      const firstLaps = validLapTimes.slice(
+        0,
+        Math.min(3, Math.floor(validLapTimes.length / 3)),
+      );
+      const lastLaps = validLapTimes.slice(
+        -Math.min(3, Math.floor(validLapTimes.length / 3)),
+      );
+
+      const firstAvg =
+        firstLaps.reduce((sum, time) => sum + time, 0) / firstLaps.length;
+      const lastAvg =
+        lastLaps.reduce((sum, time) => sum + time, 0) / lastLaps.length;
       const degradation = lastAvg - firstAvg;
 
       return {
@@ -377,7 +453,7 @@ export class StintsService {
   }
 
   private calculateBasicStintMetrics(stints: any[]) {
-    return stints.map(stint => ({
+    return stints.map((stint) => ({
       ...stint,
       averageLapTime: null,
       fastestLap: null,
@@ -388,7 +464,11 @@ export class StintsService {
   }
 
   private convertTimeToSeconds(timeString: string): number {
-    if (!timeString || timeString === '0:00:00' || timeString.includes('null')) {
+    if (
+      !timeString ||
+      timeString === '0:00:00' ||
+      timeString.includes('null')
+    ) {
       return 0;
     }
 
@@ -399,23 +479,23 @@ export class StintsService {
       const seconds = parseFloat(parts[2]);
       return hours * 3600 + minutes * 60 + seconds;
     }
-    
+
     return parseFloat(timeString) || 0;
   }
 
   private analyzeTireStrategy(stints: any[]) {
-    const compounds = stints.map(stint => stint.tireCompound);
+    const compounds = stints.map((stint) => stint.tireCompound);
     const uniqueCompounds = [...new Set(compounds)];
-    
+
     return {
       totalStints: stints.length,
       compounds: uniqueCompounds,
       strategy: compounds.join(' → '),
-      compoundUsage: uniqueCompounds.map(compound => ({
+      compoundUsage: uniqueCompounds.map((compound) => ({
         compound,
-        stints: stints.filter(s => s.tireCompound === compound).length,
+        stints: stints.filter((s) => s.tireCompound === compound).length,
         totalLaps: stints
-          .filter(s => s.tireCompound === compound)
+          .filter((s) => s.tireCompound === compound)
           .reduce((sum, stint) => sum + stint.stintLength, 0),
       })),
     };
@@ -423,11 +503,16 @@ export class StintsService {
 
   private analyzeAllTireStrategies(stints: any[]) {
     const driverStrategies = this.groupStintsByDriver(stints);
-    
-    const strategies = Object.entries(driverStrategies).reduce((result, [driverNumber, driverStints]) => {
-      result[parseInt(driverNumber)] = this.analyzeTireStrategy(driverStints as any[]);
-      return result;
-    }, {} as Record<number, any>);
+
+    const strategies = Object.entries(driverStrategies).reduce(
+      (result, [driverNumber, driverStints]) => {
+        result[parseInt(driverNumber)] = this.analyzeTireStrategy(
+          driverStints as any[],
+        );
+        return result;
+      },
+      {} as Record<number, any>,
+    );
 
     return {
       driverStrategies: strategies,
@@ -438,7 +523,7 @@ export class StintsService {
 
   private identifyUniqueStrategies(strategies: Record<number, any>) {
     const strategyPatterns = new Map();
-    
+
     Object.entries(strategies).forEach(([driverNumber, strategy]) => {
       const pattern = strategy.strategy;
       if (!strategyPatterns.has(pattern)) {
@@ -456,49 +541,66 @@ export class StintsService {
 
   private findMostCommonStrategy(strategies: Record<number, any>) {
     const strategyCounts = {};
-    
+
     Object.values(strategies).forEach((strategy: any) => {
       const pattern = strategy.strategy;
       strategyCounts[pattern] = (strategyCounts[pattern] || 0) + 1;
     });
 
-    const mostCommon = Object.entries(strategyCounts).reduce((most, [pattern, count]) => 
-      (count as number) > most.count ? { pattern, count: count as number } : most,
-      { pattern: '', count: 0 }
+    const mostCommon = Object.entries(strategyCounts).reduce(
+      (most, [pattern, count]) =>
+        (count as number) > most.count
+          ? { pattern, count: count as number }
+          : most,
+      { pattern: '', count: 0 },
     );
 
     return mostCommon;
   }
 
   private analyzeCompoundUsage(stints: any[]) {
-    const compounds = [...new Set(stints.map(s => s.tireCompound))];
-    
-    return compounds.map(compound => {
-      const compoundStints = stints.filter(s => s.tireCompound === compound);
-      
+    const compounds = [...new Set(stints.map((s) => s.tireCompound))];
+
+    return compounds.map((compound) => {
+      const compoundStints = stints.filter((s) => s.tireCompound === compound);
+
       return {
         compound,
         totalStints: compoundStints.length,
-        totalLaps: compoundStints.reduce((sum, stint) => sum + stint.stintLength, 0),
-        averageStintLength: compoundStints.reduce((sum, stint) => sum + stint.stintLength, 0) / compoundStints.length,
-        driversUsed: [...new Set(compoundStints.map(s => s.driverNumber))].length,
-        longestStint: Math.max(...compoundStints.map(s => s.stintLength)),
-        shortestStint: Math.min(...compoundStints.map(s => s.stintLength)),
+        totalLaps: compoundStints.reduce(
+          (sum, stint) => sum + stint.stintLength,
+          0,
+        ),
+        averageStintLength:
+          compoundStints.reduce((sum, stint) => sum + stint.stintLength, 0) /
+          compoundStints.length,
+        driversUsed: [...new Set(compoundStints.map((s) => s.driverNumber))]
+          .length,
+        longestStint: Math.max(...compoundStints.map((s) => s.stintLength)),
+        shortestStint: Math.min(...compoundStints.map((s) => s.stintLength)),
       };
     });
   }
 
   private compareStrategies(driverStrategies: Record<number, any>) {
     const strategies = Object.values(driverStrategies);
-    
+
     return {
-      averageStints: strategies.reduce((sum: number, strategy: any) => sum + strategy.totalStints, 0) / strategies.length,
+      averageStints:
+        strategies.reduce(
+          (sum: number, strategy: any) => sum + strategy.totalStints,
+          0,
+        ) / strategies.length,
       mostStints: Math.max(...strategies.map((s: any) => s.totalStints)),
       leastStints: Math.min(...strategies.map((s: any) => s.totalStints)),
       compoundVariety: {
         most: Math.max(...strategies.map((s: any) => s.compounds.length)),
         least: Math.min(...strategies.map((s: any) => s.compounds.length)),
-        average: strategies.reduce((sum: number, strategy: any) => sum + strategy.compounds.length, 0) / strategies.length,
+        average:
+          strategies.reduce(
+            (sum: number, strategy: any) => sum + strategy.compounds.length,
+            0,
+          ) / strategies.length,
       },
     };
   }
@@ -531,7 +633,7 @@ export class StintsService {
 
   private analyzePitStops(pitStops: any[]) {
     const totalPitStops = pitStops.length;
-    
+
     if (totalPitStops === 0) {
       return {
         totalPitStops: 0,
@@ -542,18 +644,23 @@ export class StintsService {
       };
     }
 
-    const pitLaps = pitStops.map(ps => ps.lap);
-    const averagePitLap = pitLaps.reduce((sum, lap) => sum + lap, 0) / pitLaps.length;
-    
-    const tireChanges = pitStops.map(ps => `${ps.tireFrom} → ${ps.tireTo}`);
-    const tireChangeCounts = tireChanges.reduce((counts, change) => {
-      counts[change] = (counts[change] || 0) + 1;
-      return counts;
-    }, {} as Record<string, number>);
+    const pitLaps = pitStops.map((ps) => ps.lap);
+    const averagePitLap =
+      pitLaps.reduce((sum, lap) => sum + lap, 0) / pitLaps.length;
 
-    const mostCommonTireChange = Object.entries(tireChangeCounts).reduce((most, [change, count]) => 
-      count > most.count ? { change, count } : most,
-      { change: '', count: 0 }
+    const tireChanges = pitStops.map((ps) => `${ps.tireFrom} → ${ps.tireTo}`);
+    const tireChangeCounts = tireChanges.reduce(
+      (counts, change) => {
+        counts[change] = (counts[change] || 0) + 1;
+        return counts;
+      },
+      {} as Record<string, number>,
+    );
+
+    const mostCommonTireChange = Object.entries(tireChangeCounts).reduce(
+      (most, [change, count]) =>
+        count > most.count ? { change, count } : most,
+      { change: '', count: 0 },
     );
 
     return {
@@ -576,16 +683,17 @@ export class StintsService {
       { min: 56, max: 100, label: 'Late (56+)' },
     ];
 
-    return ranges.map(range => ({
+    return ranges.map((range) => ({
       ...range,
-      count: pitLaps.filter(lap => lap >= range.min && lap <= range.max).length,
+      count: pitLaps.filter((lap) => lap >= range.min && lap <= range.max)
+        .length,
     }));
   }
 
   private analyzePitStopTiming(pitStops: any[]) {
     const driverPitTiming = {};
 
-    pitStops.forEach(pitStop => {
+    pitStops.forEach((pitStop) => {
       const driver = pitStop.driverNumber;
       if (!driverPitTiming[driver]) {
         driverPitTiming[driver] = [];
@@ -605,7 +713,7 @@ export class StintsService {
     const windows: any[] = [];
     const lapGroups: Record<string, any[]> = {};
 
-    pitStops.forEach(pitStop => {
+    pitStops.forEach((pitStop) => {
       const window = Math.floor(pitStop.lap / 5) * 5; // 5-lap windows
       if (!lapGroups[window]) {
         lapGroups[window] = [];
@@ -615,11 +723,12 @@ export class StintsService {
 
     Object.entries(lapGroups).forEach(([window, stops]) => {
       const stopsArray = stops as any[];
-      if (stopsArray.length >= 2) { // At least 2 cars pitting in the same window
+      if (stopsArray.length >= 2) {
+        // At least 2 cars pitting in the same window
         windows.push({
           lapRange: `${window}-${parseInt(window) + 4}`,
           driversCount: stopsArray.length,
-          drivers: stopsArray.map(s => s.driverNumber),
+          drivers: stopsArray.map((s) => s.driverNumber),
         });
       }
     });
@@ -630,7 +739,7 @@ export class StintsService {
   private analyzeStrategicTiming(pitStops: any[]) {
     // Analyze if pit stops were reactive (close together) or strategic (spread out)
     const lapSeparations: number[] = [];
-    
+
     for (let i = 1; i < pitStops.length; i++) {
       const separation = pitStops[i].lap - pitStops[i - 1].lap;
       lapSeparations.push(separation);
@@ -641,9 +750,11 @@ export class StintsService {
     }
 
     return {
-      averageSeparation: lapSeparations.reduce((sum, sep) => sum + sep, 0) / lapSeparations.length,
-      clusteredStops: lapSeparations.filter(sep => sep <= 2).length, // Within 2 laps
-      isolatedStops: lapSeparations.filter(sep => sep > 5).length, // More than 5 laps apart
+      averageSeparation:
+        lapSeparations.reduce((sum, sep) => sum + sep, 0) /
+        lapSeparations.length,
+      clusteredStops: lapSeparations.filter((sep) => sep <= 2).length, // Within 2 laps
+      isolatedStops: lapSeparations.filter((sep) => sep > 5).length, // More than 5 laps apart
     };
   }
 
@@ -652,7 +763,7 @@ export class StintsService {
     // For now, provide basic analysis based on stint data
     const compoundPerformance = {};
 
-    stints.forEach(stint => {
+    stints.forEach((stint) => {
       const compound = stint.tireCompound;
       if (!compoundPerformance[compound]) {
         compoundPerformance[compound] = {
@@ -661,12 +772,12 @@ export class StintsService {
           averageStintLength: 0,
         };
       }
-      
+
       compoundPerformance[compound].stints.push(stint);
       compoundPerformance[compound].totalLaps += stint.stintLength;
     });
 
-    Object.keys(compoundPerformance).forEach(compound => {
+    Object.keys(compoundPerformance).forEach((compound) => {
       const data = compoundPerformance[compound];
       data.averageStintLength = data.totalLaps / data.stints.length;
     });
@@ -678,7 +789,7 @@ export class StintsService {
     // Basic degradation analysis based on stint lengths
     const compoundDegradation = {};
 
-    stints.forEach(stint => {
+    stints.forEach((stint) => {
       const compound = stint.tireCompound;
       if (!compoundDegradation[compound]) {
         compoundDegradation[compound] = {
@@ -687,13 +798,15 @@ export class StintsService {
           maxLength: 0,
         };
       }
-      
+
       compoundDegradation[compound].stintLengths.push(stint.stintLength);
     });
 
-    Object.keys(compoundDegradation).forEach(compound => {
+    Object.keys(compoundDegradation).forEach((compound) => {
       const data = compoundDegradation[compound];
-      data.averageLength = data.stintLengths.reduce((sum, len) => sum + len, 0) / data.stintLengths.length;
+      data.averageLength =
+        data.stintLengths.reduce((sum, len) => sum + len, 0) /
+        data.stintLengths.length;
       data.maxLength = Math.max(...data.stintLengths);
     });
 
@@ -701,18 +814,24 @@ export class StintsService {
   }
 
   private compareCompoundPerformance(stints: any[]) {
-    const compounds = [...new Set(stints.map(s => s.tireCompound))];
-    
-    return compounds.map(compound => {
-      const compoundStints = stints.filter(s => s.tireCompound === compound);
-      
-      return {
-        compound,
-        averageStintLength: compoundStints.reduce((sum, stint) => sum + stint.stintLength, 0) / compoundStints.length,
-        maxStintLength: Math.max(...compoundStints.map(s => s.stintLength)),
-        usage: compoundStints.length,
-      };
-    }).sort((a, b) => b.averageStintLength - a.averageStintLength);
+    const compounds = [...new Set(stints.map((s) => s.tireCompound))];
+
+    return compounds
+      .map((compound) => {
+        const compoundStints = stints.filter(
+          (s) => s.tireCompound === compound,
+        );
+
+        return {
+          compound,
+          averageStintLength:
+            compoundStints.reduce((sum, stint) => sum + stint.stintLength, 0) /
+            compoundStints.length,
+          maxStintLength: Math.max(...compoundStints.map((s) => s.stintLength)),
+          usage: compoundStints.length,
+        };
+      })
+      .sort((a, b) => b.averageStintLength - a.averageStintLength);
   }
 
   private compareDriverStints(stints1: any, stints2: any) {
@@ -720,19 +839,21 @@ export class StintsService {
       stintCount: {
         driver1: stints1.totalStints,
         driver2: stints2.totalStints,
-        advantage: stints1.totalStints < stints2.totalStints ? 'driver1' : 'driver2',
+        advantage:
+          stints1.totalStints < stints2.totalStints ? 'driver1' : 'driver2',
       },
       compounds: {
         driver1: stints1.tireStrategy.compounds,
         driver2: stints2.tireStrategy.compounds,
-        commonCompounds: stints1.tireStrategy.compounds.filter(c => 
-          stints2.tireStrategy.compounds.includes(c)
+        commonCompounds: stints1.tireStrategy.compounds.filter((c) =>
+          stints2.tireStrategy.compounds.includes(c),
         ),
       },
       strategy: {
         driver1: stints1.tireStrategy.strategy,
         driver2: stints2.tireStrategy.strategy,
-        identical: stints1.tireStrategy.strategy === stints2.tireStrategy.strategy,
+        identical:
+          stints1.tireStrategy.strategy === stints2.tireStrategy.strategy,
       },
     };
   }
@@ -740,7 +861,9 @@ export class StintsService {
   private compareDriverStrategies(strategy1: any, strategy2: any) {
     return {
       stintDifference: Math.abs(strategy1.totalStints - strategy2.totalStints),
-      compoundDifference: Math.abs(strategy1.compounds.length - strategy2.compounds.length),
+      compoundDifference: Math.abs(
+        strategy1.compounds.length - strategy2.compounds.length,
+      ),
       strategyType: {
         driver1: this.classifyStrategy(strategy1),
         driver2: this.classifyStrategy(strategy2),
@@ -764,16 +887,27 @@ export class StintsService {
       driver1: performance1,
       driver2: performance2,
       comparison: {
-        averageLapTime: this.compareMetric(performance1.averageLapTime, performance2.averageLapTime),
-        consistency: this.compareMetric(performance1.consistency, performance2.consistency, true), // Lower is better
-        degradation: this.compareMetric(performance1.degradation, performance2.degradation, true), // Lower is better
+        averageLapTime: this.compareMetric(
+          performance1.averageLapTime,
+          performance2.averageLapTime,
+        ),
+        consistency: this.compareMetric(
+          performance1.consistency,
+          performance2.consistency,
+          true,
+        ), // Lower is better
+        degradation: this.compareMetric(
+          performance1.degradation,
+          performance2.degradation,
+          true,
+        ), // Lower is better
       },
     };
   }
 
   private calculateOverallPerformance(stints: any[]) {
-    const validStints = stints.filter(s => s.averageLapTime !== null);
-    
+    const validStints = stints.filter((s) => s.averageLapTime !== null);
+
     if (validStints.length === 0) {
       return {
         averageLapTime: null,
@@ -783,15 +917,25 @@ export class StintsService {
     }
 
     return {
-      averageLapTime: validStints.reduce((sum, stint) => sum + stint.averageLapTime, 0) / validStints.length,
-      consistency: validStints.reduce((sum, stint) => sum + stint.consistency, 0) / validStints.length,
-      degradation: validStints.reduce((sum, stint) => sum + stint.degradation, 0) / validStints.length,
+      averageLapTime:
+        validStints.reduce((sum, stint) => sum + stint.averageLapTime, 0) /
+        validStints.length,
+      consistency:
+        validStints.reduce((sum, stint) => sum + stint.consistency, 0) /
+        validStints.length,
+      degradation:
+        validStints.reduce((sum, stint) => sum + stint.degradation, 0) /
+        validStints.length,
     };
   }
 
-  private compareMetric(value1: number | null, value2: number | null, lowerIsBetter = false) {
+  private compareMetric(
+    value1: number | null,
+    value2: number | null,
+    lowerIsBetter = false,
+  ) {
     if (value1 === null || value2 === null) return null;
-    
+
     const better = lowerIsBetter ? value1 < value2 : value1 > value2;
     return {
       driver1: value1,
@@ -801,10 +945,13 @@ export class StintsService {
     };
   }
 
-  private async analyzeTireDegradationDetailed(sessionKey: number, stints: any[]) {
+  private async analyzeTireDegradationDetailed(
+    sessionKey: number,
+    stints: any[],
+  ) {
     // This would require lap-by-lap analysis
     // For now, provide basic degradation metrics
-    return stints.map(stint => ({
+    return stints.map((stint) => ({
       ...stint,
       estimatedDegradation: this.estimateDegradationFromStintLength(stint),
     }));
@@ -813,16 +960,20 @@ export class StintsService {
   private estimateDegradationFromStintLength(stint: any) {
     // Simple degradation estimation based on stint length and tire age
     const baseRate = 0.1; // Base degradation per lap
-    const ageMultiplier = 1 + (stint.tireAge * 0.05); // Older tires degrade faster
-    
+    const ageMultiplier = 1 + stint.tireAge * 0.05; // Older tires degrade faster
+
     return stint.stintLength * baseRate * ageMultiplier;
   }
 
   private generateDegradationSummary(degradationData: any[]) {
-    const degradationValues = degradationData.map(d => d.estimatedDegradation);
-    
+    const degradationValues = degradationData.map(
+      (d) => d.estimatedDegradation,
+    );
+
     return {
-      averageDegradation: degradationValues.reduce((sum, deg) => sum + deg, 0) / degradationValues.length,
+      averageDegradation:
+        degradationValues.reduce((sum, deg) => sum + deg, 0) /
+        degradationValues.length,
       maxDegradation: Math.max(...degradationValues),
       minDegradation: Math.min(...degradationValues),
       totalDataPoints: degradationData.length,
@@ -832,7 +983,7 @@ export class StintsService {
   private analyzeCompoundDegradation(degradationData: any[]) {
     const compoundDegradation = {};
 
-    degradationData.forEach(stint => {
+    degradationData.forEach((stint) => {
       const compound = stint.tireCompound;
       if (!compoundDegradation[compound]) {
         compoundDegradation[compound] = [];
@@ -840,10 +991,11 @@ export class StintsService {
       compoundDegradation[compound].push(stint.estimatedDegradation);
     });
 
-    Object.keys(compoundDegradation).forEach(compound => {
+    Object.keys(compoundDegradation).forEach((compound) => {
       const degradations = compoundDegradation[compound];
       compoundDegradation[compound] = {
-        average: degradations.reduce((sum, deg) => sum + deg, 0) / degradations.length,
+        average:
+          degradations.reduce((sum, deg) => sum + deg, 0) / degradations.length,
         max: Math.max(...degradations),
         min: Math.min(...degradations),
         samples: degradations.length,

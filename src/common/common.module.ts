@@ -14,15 +14,15 @@ import { CircuitBreakerService } from './services/circuit-breaker.service';
   ],
   providers: [
     CircuitBreakerService,
-    OpenF1ClientService, 
-    CacheService, 
-    CachedOpenF1ClientService
+    OpenF1ClientService,
+    CacheService,
+    CachedOpenF1ClientService,
   ],
   exports: [
     CircuitBreakerService,
-    OpenF1ClientService, 
-    CacheService, 
-    CachedOpenF1ClientService
+    OpenF1ClientService,
+    CacheService,
+    CachedOpenF1ClientService,
   ],
 })
 export class CommonModule {}

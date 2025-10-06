@@ -11,7 +11,7 @@ export class DriversController {
     @Param('sessionKey', ParseIntPipe) sessionKey: number,
   ): Promise<ApiResponseDto<any>> {
     const drivers = await this.driversService.getSessionDrivers(sessionKey);
-    
+
     return {
       success: true,
       data: drivers,
@@ -32,7 +32,7 @@ export class DriversController {
       dateStart,
       dateEnd,
     );
-    
+
     return {
       success: true,
       data: telemetry,
@@ -51,7 +51,7 @@ export class DriversController {
       driverNumber,
       lapNumber,
     );
-    
+
     return {
       success: true,
       data: laps,
@@ -64,8 +64,11 @@ export class DriversController {
     @Param('sessionKey', ParseIntPipe) sessionKey: number,
     @Param('driverNumber', ParseIntPipe) driverNumber: number,
   ): Promise<ApiResponseDto<any>> {
-    const info = await this.driversService.getDriverInfo(sessionKey, driverNumber);
-    
+    const info = await this.driversService.getDriverInfo(
+      sessionKey,
+      driverNumber,
+    );
+
     return {
       success: true,
       data: info,

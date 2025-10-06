@@ -12,7 +12,7 @@ export class LapsController {
     @Query('lapNumber') lapNumber?: number,
   ): Promise<ApiResponseDto<any>> {
     const laps = await this.lapsService.getSessionLaps(sessionKey, lapNumber);
-    
+
     return {
       success: true,
       data: laps,
@@ -26,7 +26,7 @@ export class LapsController {
     @Param('lapNumber', ParseIntPipe) lapNumber: number,
   ): Promise<ApiResponseDto<any>> {
     const lap = await this.lapsService.getSpecificLap(sessionKey, lapNumber);
-    
+
     return {
       success: true,
       data: lap,
@@ -40,8 +40,12 @@ export class LapsController {
     @Param('driverNumber', ParseIntPipe) driverNumber: number,
     @Query('lapNumber') lapNumber?: number,
   ): Promise<ApiResponseDto<any>> {
-    const laps = await this.lapsService.getDriverLaps(sessionKey, driverNumber, lapNumber);
-    
+    const laps = await this.lapsService.getDriverLaps(
+      sessionKey,
+      driverNumber,
+      lapNumber,
+    );
+
     return {
       success: true,
       data: laps,
@@ -54,8 +58,11 @@ export class LapsController {
     @Param('sessionKey', ParseIntPipe) sessionKey: number,
     @Query('limit') limit?: number,
   ): Promise<ApiResponseDto<any>> {
-    const fastestLaps = await this.lapsService.getFastestLaps(sessionKey, limit);
-    
+    const fastestLaps = await this.lapsService.getFastestLaps(
+      sessionKey,
+      limit,
+    );
+
     return {
       success: true,
       data: fastestLaps,
@@ -68,7 +75,7 @@ export class LapsController {
     @Param('sessionKey', ParseIntPipe) sessionKey: number,
   ): Promise<ApiResponseDto<any>> {
     const analysis = await this.lapsService.getLapAnalysis(sessionKey);
-    
+
     return {
       success: true,
       data: analysis,

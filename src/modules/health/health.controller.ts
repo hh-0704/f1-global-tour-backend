@@ -1,6 +1,10 @@
 import { Controller, Get, Post } from '@nestjs/common';
 import { HealthService } from './health.service';
-import type { HealthStatus, CircuitBreakerStatsWithHealth, ResetResponse } from './interfaces/health.interface';
+import type {
+  HealthStatus,
+  CircuitBreakerStatsWithHealth,
+  ResetResponse,
+} from './interfaces/health.interface';
 
 @Controller('health')
 export class HealthController {
