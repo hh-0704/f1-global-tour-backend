@@ -301,6 +301,25 @@ export class RaceControlService {
     }
   }
 
+  async getSessionRaceControlByCategory(sessionKey: number, category?: string) {
+    const raceControlData = await this.getSessionRaceControl(sessionKey);
+
+    if (!category) {
+      return raceControlData;
+    }
+
+    const filteredMessages = raceControlData.messages.filter(
+      (message) => message.category?.toLowerCase() === category.toLowerCase(),
+    );
+
+    return {
+      ...raceControlData,
+      totalMessages: filteredMessages.length,
+      messages: filteredMessages,
+      summary: this.generateRaceControlSummary(filteredMessages),
+    };
+  }
+
   async getDRSZones(sessionKey: number) {
     try {
       this.logger.debug(`Analyzing DRS zones for session ${sessionKey}`);

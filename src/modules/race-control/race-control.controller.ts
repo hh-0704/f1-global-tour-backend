@@ -149,4 +149,25 @@ export class RaceControlController {
       timestamp: new Date().toISOString(),
     };
   }
+
+  @Get(':sessionKey')
+  @ApiOperation({ summary: 'Get race control data (alias)', description: 'Alias endpoint for race control data. Supports optional category filtering (e.g., category=Flag).' })
+  @ApiParam({ name: 'sessionKey', description: 'Session identifier' })
+  @ApiQuery({ name: 'category', required: false, description: 'Filter by message category (e.g., Flag, SafetyCar, Drs)' })
+  @ApiResponse({ status: 200, description: 'Race control data retrieved successfully' })
+  async getSessionRaceControlDirect(
+    @Param('sessionKey', ParseIntPipe) sessionKey: number,
+    @Query('category') category?: string,
+  ): Promise<ApiResponseDto<any>> {
+    const raceControl = await this.raceControlService.getSessionRaceControlByCategory(
+      sessionKey,
+      category,
+    );
+
+    return {
+      success: true,
+      data: raceControl,
+      timestamp: new Date().toISOString(),
+    };
+  }
 }
