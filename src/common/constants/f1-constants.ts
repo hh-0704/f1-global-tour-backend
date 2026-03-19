@@ -4,20 +4,6 @@
  */
 export const F1_CONSTANTS = {
   /**
-   * Cache TTL values in seconds
-   * Different data types have different update frequencies
-   */
-  CACHE_TTL: {
-    SESSIONS: 3600, // 1 hour - Sessions rarely change once created
-    DRIVERS: 1800, // 30 minutes - Driver info is stable during sessions
-    LAPS: 900, // 15 minutes - Lap data is historical, less frequent updates
-    TELEMETRY: 600, // 10 minutes - Car data, moderate update frequency
-    INTERVALS: 300, // 5 minutes - Real-time intervals, frequent updates
-    RACE_CONTROL: 1800, // 30 minutes - Race control messages, moderate updates
-    STINTS: 1800, // 30 minutes - Stint data, less frequent updates
-  },
-
-  /**
    * OpenF1 API specific values and mappings
    */
   OPENF1: {
@@ -206,7 +192,6 @@ export const F1_CONSTANTS = {
     LEVELS: {
       API_CALLS: 'debug',
       DATA_TRANSFORMATION: 'debug',
-      CACHE_OPERATIONS: 'debug',
       ERROR_HANDLING: 'error',
       PERFORMANCE_METRICS: 'log',
     },
@@ -222,7 +207,6 @@ export const F1_CONSTANTS = {
       CAR_DATA: 'CarDataService',
       RACE_CONTROL: 'RaceControlService',
       STINTS: 'StintsService',
-      CACHE: 'CacheService',
       OPENF1_CLIENT: 'OpenF1ClientService',
     },
   },
@@ -245,8 +229,6 @@ export const F1_CONSTANTS = {
      */
     TIMEOUTS: {
       OPENF1_API: 30000, // 30 seconds for OpenF1 API calls
-      CACHE_OPERATION: 5000, // 5 seconds for cache operations
-      DATABASE_QUERY: 10000, // 10 seconds for database queries
     },
 
     /**
@@ -292,7 +274,6 @@ export const F1_CONSTANTS = {
  * Type definitions for F1 constants
  */
 export type F1ConstantsType = typeof F1_CONSTANTS;
-export type CacheTTLKeys = keyof typeof F1_CONSTANTS.CACHE_TTL;
 export type SpeedCategory =
   (typeof F1_CONSTANTS.PERFORMANCE.SPEED_RANGES)[number]['category'];
 export type LogContext =
@@ -302,13 +283,6 @@ export type LogContext =
  * Helper functions for working with constants
  */
 export class F1ConstantsHelper {
-  /**
-   * Get cache TTL for a specific data type
-   */
-  static getCacheTTL(dataType: CacheTTLKeys): number {
-    return F1_CONSTANTS.CACHE_TTL[dataType];
-  }
-
   /**
    * Categorize speed based on predefined ranges
    */

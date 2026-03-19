@@ -5,12 +5,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { CommonModule } from './common/common.module';
 import { SessionsModule } from './modules/sessions/sessions.module';
-import { DriversModule } from './modules/drivers/drivers.module';
 import { LapsModule } from './modules/laps/laps.module';
-import { IntervalsModule } from './modules/intervals/intervals.module';
-import { CarDataModule } from './modules/car-data/car-data.module';
-import { RaceControlModule } from './modules/race-control/race-control.module';
-import { StintsModule } from './modules/stints/stints.module';
 import { HealthModule } from './modules/health/health.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import configuration from './config/configuration';
@@ -23,12 +18,7 @@ import configuration from './config/configuration';
     }),
     CommonModule,
     SessionsModule,
-    DriversModule,
     LapsModule,
-    IntervalsModule,
-    CarDataModule,
-    RaceControlModule,
-    StintsModule,
     HealthModule,
   ],
   controllers: [AppController],

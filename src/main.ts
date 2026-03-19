@@ -37,15 +37,11 @@ async function bootstrap() {
   // Swagger configuration
   const config = new DocumentBuilder()
     .setTitle('F1 Global Tour API')
-    .setDescription('NestJS-based API server for F1 replay functionality with OpenF1 API integration')
+    .setDescription('OpenF1 API 프록시 서버. 세션 선택 → driver-timings 한 번 호출로 전체 리플레이 프레임 수신.')
     .setVersion('1.0')
-    .addTag('sessions', 'Session management and replay initialization')
-    .addTag('drivers', 'Driver information and standings')
-    .addTag('laps', 'Lap data and fastest laps')
-    .addTag('intervals', 'Timing gaps and live intervals')
-    .addTag('car-data', 'Telemetry data (speed, throttle, brake, DRS)')
-    .addTag('race-control', 'Flags, safety car, and race events')
-    .addTag('stints', 'Tire strategy and pit stops')
+    .addTag('sessions', '세션 목록, 드라이버 조회, 리플레이 프레임 계산')
+    .addTag('laps', '랩 데이터 조회')
+    .addTag('health', 'Circuit Breaker 상태 및 헬스체크')
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);

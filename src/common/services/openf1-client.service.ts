@@ -28,6 +28,33 @@ export class OpenF1ClientService {
   private readonly logger = new Logger(OpenF1ClientService.name);
   private readonly baseUrl: string;
 
+  // 429 Rate Limit 시 재시도 (최대 3회, 지수 백오프)
+  private async fetchWithRetry<T>(url: string, label: string): Promise<T> {
+    const MAX_RETRIES = 3;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const response$ = this.httpService.get<T>(url).pipe(
+          catchError((error: AxiosError) => { throw error; }),
+        );
+        const response = await firstValueFrom(response$);
+        return response.data;
+      } catch (error) {
+        const isRateLimit =
+          error instanceof AxiosError && error.response?.status === 429;
+        if (isRateLimit && attempt < MAX_RETRIES) {
+          const delayMs = 2000 * (attempt + 1); // 2s → 4s → 6s
+          this.logger.warn(
+            `[${label}] 429 Rate Limit — ${delayMs}ms 후 재시도 (${attempt + 1}/${MAX_RETRIES})`,
+          );
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw new HttpException('Max retries exceeded', HttpStatus.TOO_MANY_REQUESTS);
+  }
+
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
@@ -78,26 +105,16 @@ export class OpenF1ClientService {
       async () => {
         const url = this.buildUrl('/drivers', params);
         this.logger.debug(`Fetching drivers from: ${url}`);
-
-        const response$ = this.httpService.get<OpenF1Driver[]>(url).pipe(
-          catchError((error: AxiosError) => {
-            this.logger.error(
-              `OpenF1 API Error (drivers): ${error.message}`,
-              error.stack,
-            );
-            throw new HttpException(
-              'Failed to fetch driver data',
-              HttpStatus.SERVICE_UNAVAILABLE,
-            );
-          }),
-        );
-
-        const response = await firstValueFrom(response$);
-        this.logger.debug(`Retrieved ${response.data.length} drivers`);
-
-        return response.data;
+        try {
+          const data = await this.fetchWithRetry<OpenF1Driver[]>(url, 'drivers');
+          this.logger.debug(`Retrieved ${data.length} drivers`);
+          return data;
+        } catch (error) {
+          this.logger.error(`OpenF1 API Error (drivers): ${(error as AxiosError).message}`);
+          throw new HttpException('Failed to fetch driver data', HttpStatus.SERVICE_UNAVAILABLE);
+        }
       },
-      [], // Empty array as fallback
+      [],
     );
   }
 
@@ -106,26 +123,16 @@ export class OpenF1ClientService {
       async () => {
         const url = this.buildUrl('/laps', params);
         this.logger.debug(`Fetching laps from: ${url}`);
-
-        const response$ = this.httpService.get<OpenF1Lap[]>(url).pipe(
-          catchError((error: AxiosError) => {
-            this.logger.error(
-              `OpenF1 API Error (laps): ${error.message}`,
-              error.stack,
-            );
-            throw new HttpException(
-              'Failed to fetch lap data',
-              HttpStatus.SERVICE_UNAVAILABLE,
-            );
-          }),
-        );
-
-        const response = await firstValueFrom(response$);
-        this.logger.debug(`Retrieved ${response.data.length} laps`);
-
-        return response.data;
+        try {
+          const data = await this.fetchWithRetry<OpenF1Lap[]>(url, 'laps');
+          this.logger.debug(`Retrieved ${data.length} laps`);
+          return data;
+        } catch (error) {
+          this.logger.error(`OpenF1 API Error (laps): ${(error as AxiosError).message}`);
+          throw new HttpException('Failed to fetch lap data', HttpStatus.SERVICE_UNAVAILABLE);
+        }
       },
-      [], // Empty array as fallback
+      [],
     );
   }
 
@@ -164,26 +171,16 @@ export class OpenF1ClientService {
       async () => {
         const url = this.buildUrl('/intervals', params);
         this.logger.debug(`Fetching intervals from: ${url}`);
-
-        const response$ = this.httpService.get<OpenF1Interval[]>(url).pipe(
-          catchError((error: AxiosError) => {
-            this.logger.error(
-              `OpenF1 API Error (intervals): ${error.message}`,
-              error.stack,
-            );
-            throw new HttpException(
-              'Failed to fetch interval data',
-              HttpStatus.SERVICE_UNAVAILABLE,
-            );
-          }),
-        );
-
-        const response = await firstValueFrom(response$);
-        this.logger.debug(`Retrieved ${response.data.length} interval points`);
-
-        return response.data;
+        try {
+          const data = await this.fetchWithRetry<OpenF1Interval[]>(url, 'intervals');
+          this.logger.debug(`Retrieved ${data.length} interval points`);
+          return data;
+        } catch (error) {
+          this.logger.error(`OpenF1 API Error (intervals): ${(error as AxiosError).message}`);
+          throw new HttpException('Failed to fetch interval data', HttpStatus.SERVICE_UNAVAILABLE);
+        }
       },
-      [], // Empty array as fallback
+      [],
     );
   }
 
@@ -224,26 +221,16 @@ export class OpenF1ClientService {
       async () => {
         const url = this.buildUrl('/stints', params);
         this.logger.debug(`Fetching stints from: ${url}`);
-
-        const response$ = this.httpService.get<OpenF1Stint[]>(url).pipe(
-          catchError((error: AxiosError) => {
-            this.logger.error(
-              `OpenF1 API Error (stints): ${error.message}`,
-              error.stack,
-            );
-            throw new HttpException(
-              'Failed to fetch stint data',
-              HttpStatus.SERVICE_UNAVAILABLE,
-            );
-          }),
-        );
-
-        const response = await firstValueFrom(response$);
-        this.logger.debug(`Retrieved ${response.data.length} stints`);
-
-        return response.data;
+        try {
+          const data = await this.fetchWithRetry<OpenF1Stint[]>(url, 'stints');
+          this.logger.debug(`Retrieved ${data.length} stints`);
+          return data;
+        } catch (error) {
+          this.logger.error(`OpenF1 API Error (stints): ${(error as AxiosError).message}`);
+          throw new HttpException('Failed to fetch stint data', HttpStatus.SERVICE_UNAVAILABLE);
+        }
       },
-      [], // Empty array as fallback
+      [],
     );
   }
 
