@@ -151,7 +151,12 @@ export class SessionsService extends BaseF1Service {
     const lap1Rows = allLaps.filter((l) => l.lap_number === 1);
     if (lap1Rows.length === 0 || allIntervals.length === 0) return [];
 
-    const raceStartMs = Math.min(...lap1Rows.map((l) => new Date(l.date_start).getTime()));
+    const lap1ValidTimes = lap1Rows
+      .filter((l) => l.date_start != null)
+      .map((l) => new Date(l.date_start).getTime())
+      .filter((t) => t > 0 && Number.isFinite(t));
+    if (lap1ValidTimes.length === 0) return [];
+    const raceStartMs = Math.min(...lap1ValidTimes);
     const maxLap = Math.max(...allLaps.map((l) => l.lap_number).filter((n) => Number.isFinite(n)));
 
     // 전 랩 완료 데이터 사전 계산
@@ -241,7 +246,7 @@ export class SessionsService extends BaseF1Service {
       const currentLapData = lapTimingsMap.get(currentLap) ?? [];
       const currentLapMap = new Map(currentLapData.map((t) => [t.driverCode, t]));
 
-      const driverRows: DriverDisplayRow[] = standings.map((standing) => {
+      const rawRows: DriverDisplayRow[] = standings.map((standing) => {
         const lap = lapMap.get(standing.driverCode);
         const cur = currentLapMap.get(standing.driverCode);
         return {
@@ -260,6 +265,15 @@ export class SessionsService extends BaseF1Service {
           },
         };
       });
+
+      // DNF 드라이버를 맨 뒤로 재정렬하고 position/interval 재할당
+      const activeRows = rawRows.filter((r) => r.currentLapTime !== 'DNF');
+      const dnfRows = rawRows.filter((r) => r.currentLapTime === 'DNF');
+      const driverRows = [...activeRows, ...dnfRows].map((row, i) => ({
+        ...row,
+        position: i + 1,
+        ...(row.currentLapTime === 'DNF' ? { interval: 'DNF', intervalToAhead: '' } : {}),
+      }));
 
       frames.push({ timeOffset, currentLap, drivers: driverRows });
     }
@@ -322,8 +336,20 @@ export class SessionsService extends BaseF1Service {
           null,
         );
 
-      const isRetired =
-        lapAtN != null && lapAtN.lap_duration === null && !lapAtN.is_pit_out_lap && lapNum > 1;
+      // 이후 랩에 유효한 데이터가 있으면 DNF가 아님 (레드플래그 등으로 인한 일시적 null)
+      const hasLaterValidLaps = driverLaps.some(
+        (l) => l.lap_number > lapNum && l.lap_duration !== null,
+      );
+      const driverMaxLap = driverLaps.length > 0
+        ? Math.max(...driverLaps.map((l) => l.lap_number))
+        : 0;
+
+      const isRetired = !hasLaterValidLaps && (
+        // Case 1: 해당 랩 데이터가 있지만 lap_duration이 null (명시적 DNF)
+        (lapAtN != null && lapAtN.lap_duration === null && !lapAtN.is_pit_out_lap && lapNum > 1) ||
+        // Case 2: 해당 랩 데이터 자체가 없고, 이전 랩이 마지막 (완전 리타이어)
+        (!lapAtN && driverLaps.length > 0 && driverMaxLap < lapNum)
+      );
 
       const activeStint = stints.find(
         (s) => s.driver_number === interval.driver_number && s.lap_start <= lapNum && s.lap_end >= lapNum,
@@ -373,8 +399,10 @@ export class SessionsService extends BaseF1Service {
     const sorted = [...intervals].sort((a, b) => {
       const ga = toNum(a.gap_to_leader);
       const gb = toNum(b.gap_to_leader);
-      if (ga === null) return -1;
-      if (gb === null) return 1;
+      // null gap → 맨 뒤로 (DNF/데이터 없음). 리더는 gap_to_leader=0
+      if (ga === null && gb === null) return 0;
+      if (ga === null) return 1;
+      if (gb === null) return -1;
       return ga - gb;
     });
 
