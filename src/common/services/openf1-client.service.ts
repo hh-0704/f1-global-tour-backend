@@ -141,26 +141,16 @@ export class OpenF1ClientService {
       async () => {
         const url = this.buildUrl('/car_data', params);
         this.logger.debug(`Fetching car data from: ${url}`);
-
-        const response$ = this.httpService.get<OpenF1CarData[]>(url).pipe(
-          catchError((error: AxiosError) => {
-            this.logger.error(
-              `OpenF1 API Error (car_data): ${error.message}`,
-              error.stack,
-            );
-            throw new HttpException(
-              'Failed to fetch car telemetry data',
-              HttpStatus.SERVICE_UNAVAILABLE,
-            );
-          }),
-        );
-
-        const response = await firstValueFrom(response$);
-        this.logger.debug(`Retrieved ${response.data.length} car data points`);
-
-        return response.data;
+        try {
+          const data = await this.fetchWithRetry<OpenF1CarData[]>(url, 'car_data');
+          this.logger.debug(`Retrieved ${data.length} car data points`);
+          return data;
+        } catch (error) {
+          this.logger.error(`OpenF1 API Error (car_data): ${(error as AxiosError).message}`);
+          throw new HttpException('Failed to fetch car telemetry data', HttpStatus.SERVICE_UNAVAILABLE);
+        }
       },
-      [], // Empty array as fallback
+      [],
     );
   }
 
@@ -191,26 +181,16 @@ export class OpenF1ClientService {
       async () => {
         const url = this.buildUrl('/race_control', params);
         this.logger.debug(`Fetching race control from: ${url}`);
-
-        const response$ = this.httpService.get<OpenF1RaceControl[]>(url).pipe(
-          catchError((error: AxiosError) => {
-            this.logger.error(
-              `OpenF1 API Error (race_control): ${error.message}`,
-              error.stack,
-            );
-            throw new HttpException(
-              'Failed to fetch race control data',
-              HttpStatus.SERVICE_UNAVAILABLE,
-            );
-          }),
-        );
-
-        const response = await firstValueFrom(response$);
-        this.logger.debug(
-          `Retrieved ${response.data.length} race control messages`,
-        );
-
-        return response.data;
+        try {
+          const data = await this.fetchWithRetry<OpenF1RaceControl[]>(url, 'race_control');
+          this.logger.debug(`Retrieved ${data.length} race control messages`);
+          return data;
+        } catch (error) {
+          throw new HttpException(
+            'Failed to fetch race control data',
+            HttpStatus.SERVICE_UNAVAILABLE,
+          );
+        }
       },
       [], // Empty array as fallback
     );
