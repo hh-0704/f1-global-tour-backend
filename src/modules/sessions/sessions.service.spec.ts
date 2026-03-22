@@ -1,8 +1,14 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { SessionsService } from './sessions.service';
 import { LapsService } from '../laps/laps.service';
 import { CachedOpenF1ClientService } from '../../common/services/cached-openf1-client.service';
-import { OpenF1Driver, OpenF1Lap, OpenF1Interval, OpenF1Stint } from '../../common/interfaces/openf1.interface';
+import {
+  OpenF1Driver,
+  OpenF1Lap,
+  OpenF1Interval,
+  OpenF1Stint,
+} from '../../common/interfaces/openf1.interface';
 
 // ─── 테스트용 픽스처 ───────────────────────────────────────────────────────────
 
@@ -13,45 +19,247 @@ const t = (offsetSec: number) =>
   new Date(new Date(RACE_START).getTime() + offsetSec * 1000).toISOString();
 
 const DRIVERS: OpenF1Driver[] = [
-  { meeting_key: 1, session_key: SESSION_KEY, driver_number: 1,  name_acronym: 'VER', team_name: 'Red Bull Racing', team_colour: '3671C6' },
-  { meeting_key: 1, session_key: SESSION_KEY, driver_number: 44, name_acronym: 'HAM', team_name: 'Mercedes',         team_colour: '27F4D2' },
-  { meeting_key: 1, session_key: SESSION_KEY, driver_number: 16, name_acronym: 'LEC', team_name: 'Ferrari',          team_colour: 'E8002D' },
+  {
+    meeting_key: 1,
+    session_key: SESSION_KEY,
+    driver_number: 1,
+    full_name: 'Max VERSTAPPEN',
+    name_acronym: 'VER',
+    team_name: 'Red Bull Racing',
+    team_colour: '3671C6',
+  },
+  {
+    meeting_key: 1,
+    session_key: SESSION_KEY,
+    driver_number: 44,
+    full_name: 'Lewis HAMILTON',
+    name_acronym: 'HAM',
+    team_name: 'Mercedes',
+    team_colour: '27F4D2',
+  },
+  {
+    meeting_key: 1,
+    session_key: SESSION_KEY,
+    driver_number: 16,
+    full_name: 'Charles LECLERC',
+    name_acronym: 'LEC',
+    team_name: 'Ferrari',
+    team_colour: 'E8002D',
+  },
 ];
 
 const LAPS: OpenF1Lap[] = [
   // VER: 랩1(90s) — sector1=fastest(2051), sector2=normal(2048), sector3=personal_best(2049)
-  { meeting_key: 1, session_key: SESSION_KEY, driver_number: 1,  lap_number: 1, date_start: t(0),   lap_duration: 90,   is_pit_out_lap: false, duration_sector_1: 28, duration_sector_2: 32, duration_sector_3: 30, segments_sector_1: [2051, 2048], segments_sector_2: [2048], segments_sector_3: [2049] },
+  {
+    meeting_key: 1,
+    session_key: SESSION_KEY,
+    driver_number: 1,
+    lap_number: 1,
+    date_start: t(0),
+    lap_duration: 90,
+    is_pit_out_lap: false,
+    duration_sector_1: 28,
+    duration_sector_2: 32,
+    duration_sector_3: 30,
+    segments_sector_1: [2051, 2048],
+    segments_sector_2: [2048],
+    segments_sector_3: [2049],
+  },
   // VER: 랩2(89s) — sector2=fastest(2051)
-  { meeting_key: 1, session_key: SESSION_KEY, driver_number: 1,  lap_number: 2, date_start: t(90),  lap_duration: 89,   is_pit_out_lap: false, duration_sector_1: 27, duration_sector_2: 31, duration_sector_3: 31, segments_sector_1: [2049], segments_sector_2: [2051], segments_sector_3: [2048] },
+  {
+    meeting_key: 1,
+    session_key: SESSION_KEY,
+    driver_number: 1,
+    lap_number: 2,
+    date_start: t(90),
+    lap_duration: 89,
+    is_pit_out_lap: false,
+    duration_sector_1: 27,
+    duration_sector_2: 31,
+    duration_sector_3: 31,
+    segments_sector_1: [2049],
+    segments_sector_2: [2051],
+    segments_sector_3: [2048],
+  },
   // HAM: 랩1(93s), 랩2(91s) — 모두 normal(2048)
-  { meeting_key: 1, session_key: SESSION_KEY, driver_number: 44, lap_number: 1, date_start: t(0),   lap_duration: 93,   is_pit_out_lap: false, duration_sector_1: 29, duration_sector_2: 33, duration_sector_3: 31, segments_sector_1: [2048], segments_sector_2: [2048], segments_sector_3: [2048] },
-  { meeting_key: 1, session_key: SESSION_KEY, driver_number: 44, lap_number: 2, date_start: t(93),  lap_duration: 91,   is_pit_out_lap: false, duration_sector_1: 28, duration_sector_2: 32, duration_sector_3: 31, segments_sector_1: [2048], segments_sector_2: [2049], segments_sector_3: [2048] },
+  {
+    meeting_key: 1,
+    session_key: SESSION_KEY,
+    driver_number: 44,
+    lap_number: 1,
+    date_start: t(0),
+    lap_duration: 93,
+    is_pit_out_lap: false,
+    duration_sector_1: 29,
+    duration_sector_2: 33,
+    duration_sector_3: 31,
+    segments_sector_1: [2048],
+    segments_sector_2: [2048],
+    segments_sector_3: [2048],
+  },
+  {
+    meeting_key: 1,
+    session_key: SESSION_KEY,
+    driver_number: 44,
+    lap_number: 2,
+    date_start: t(93),
+    lap_duration: 91,
+    is_pit_out_lap: false,
+    duration_sector_1: 28,
+    duration_sector_2: 32,
+    duration_sector_3: 31,
+    segments_sector_1: [2048],
+    segments_sector_2: [2049],
+    segments_sector_3: [2048],
+  },
   // LEC: 랩1(91s) 정상, 랩2 DNF(null)
-  { meeting_key: 1, session_key: SESSION_KEY, driver_number: 16, lap_number: 1, date_start: t(0),   lap_duration: 91,   is_pit_out_lap: false, duration_sector_1: 28, duration_sector_2: 32, duration_sector_3: 31, segments_sector_1: [2048], segments_sector_2: [2048], segments_sector_3: [2048] },
-  { meeting_key: 1, session_key: SESSION_KEY, driver_number: 16, lap_number: 2, date_start: t(91),  lap_duration: null, is_pit_out_lap: false, duration_sector_1: null, duration_sector_2: null, duration_sector_3: null },
+  {
+    meeting_key: 1,
+    session_key: SESSION_KEY,
+    driver_number: 16,
+    lap_number: 1,
+    date_start: t(0),
+    lap_duration: 91,
+    is_pit_out_lap: false,
+    duration_sector_1: 28,
+    duration_sector_2: 32,
+    duration_sector_3: 31,
+    segments_sector_1: [2048],
+    segments_sector_2: [2048],
+    segments_sector_3: [2048],
+  },
+  {
+    meeting_key: 1,
+    session_key: SESSION_KEY,
+    driver_number: 16,
+    lap_number: 2,
+    date_start: t(91),
+    lap_duration: null,
+    is_pit_out_lap: false,
+    duration_sector_1: null,
+    duration_sector_2: null,
+    duration_sector_3: null,
+  },
 ];
 
 const INTERVALS: OpenF1Interval[] = [
   // 레이스 시작 전 (프레임 생성 제외 대상)
-  { meeting_key: 1, session_key: SESSION_KEY, driver_number: 1,  date: t(-10), gap_to_leader: null, interval: 0 },
+  {
+    meeting_key: 1,
+    session_key: SESSION_KEY,
+    driver_number: 1,
+    date: t(-10),
+    gap_to_leader: 0,
+    interval: 0,
+  },
   // 랩1 중 (~30s) — currentLap=1, displayDataLap=0 → lapTime '--:--:---'
-  { meeting_key: 1, session_key: SESSION_KEY, driver_number: 1,  date: t(30),  gap_to_leader: null, interval: 0 },
-  { meeting_key: 1, session_key: SESSION_KEY, driver_number: 44, date: t(32),  gap_to_leader: 3.2,  interval: 3.2 },
-  { meeting_key: 1, session_key: SESSION_KEY, driver_number: 16, date: t(34),  gap_to_leader: 1.5,  interval: 1.5 },
+  {
+    meeting_key: 1,
+    session_key: SESSION_KEY,
+    driver_number: 1,
+    date: t(30),
+    gap_to_leader: 0,
+    interval: 0,
+  },
+  {
+    meeting_key: 1,
+    session_key: SESSION_KEY,
+    driver_number: 44,
+    date: t(32),
+    gap_to_leader: 3.2,
+    interval: 3.2,
+  },
+  {
+    meeting_key: 1,
+    session_key: SESSION_KEY,
+    driver_number: 16,
+    date: t(34),
+    gap_to_leader: 1.5,
+    interval: 1.5,
+  },
   // 랩2 중 (~120s) — currentLap=2, displayDataLap=1 → 랩1 완료 데이터
-  { meeting_key: 1, session_key: SESSION_KEY, driver_number: 1,  date: t(120), gap_to_leader: null, interval: 0 },
-  { meeting_key: 1, session_key: SESSION_KEY, driver_number: 44, date: t(122), gap_to_leader: 5.8,  interval: 2.6 },
-  { meeting_key: 1, session_key: SESSION_KEY, driver_number: 16, date: t(124), gap_to_leader: 2.9,  interval: 1.4 },
+  {
+    meeting_key: 1,
+    session_key: SESSION_KEY,
+    driver_number: 1,
+    date: t(120),
+    gap_to_leader: 0,
+    interval: 0,
+  },
+  {
+    meeting_key: 1,
+    session_key: SESSION_KEY,
+    driver_number: 44,
+    date: t(122),
+    gap_to_leader: 5.8,
+    interval: 2.6,
+  },
+  {
+    meeting_key: 1,
+    session_key: SESSION_KEY,
+    driver_number: 16,
+    date: t(124),
+    gap_to_leader: 2.9,
+    interval: 1.4,
+  },
   // 레이스 종료 후 (~200s) — VER 랩2 완주: t(90+89)=t(179), displayDataLap=maxLap=2
-  { meeting_key: 1, session_key: SESSION_KEY, driver_number: 1,  date: t(200), gap_to_leader: null, interval: 0 },
-  { meeting_key: 1, session_key: SESSION_KEY, driver_number: 44, date: t(202), gap_to_leader: 7.1,  interval: 7.1 },
-  { meeting_key: 1, session_key: SESSION_KEY, driver_number: 16, date: t(204), gap_to_leader: 3.5,  interval: 3.5 },
+  {
+    meeting_key: 1,
+    session_key: SESSION_KEY,
+    driver_number: 1,
+    date: t(200),
+    gap_to_leader: 0,
+    interval: 0,
+  },
+  {
+    meeting_key: 1,
+    session_key: SESSION_KEY,
+    driver_number: 44,
+    date: t(202),
+    gap_to_leader: 7.1,
+    interval: 7.1,
+  },
+  {
+    meeting_key: 1,
+    session_key: SESSION_KEY,
+    driver_number: 16,
+    date: t(204),
+    gap_to_leader: 3.5,
+    interval: 3.5,
+  },
 ];
 
 const STINTS: OpenF1Stint[] = [
-  { meeting_key: 1, session_key: SESSION_KEY, driver_number: 1,  stint_number: 1, lap_start: 1, lap_end: 2, compound: 'SOFT',    tyre_age_at_start: 0 },
-  { meeting_key: 1, session_key: SESSION_KEY, driver_number: 44, stint_number: 1, lap_start: 1, lap_end: 2, compound: 'MEDIUM',  tyre_age_at_start: 0 },
-  { meeting_key: 1, session_key: SESSION_KEY, driver_number: 16, stint_number: 1, lap_start: 1, lap_end: 1, compound: 'HARD',    tyre_age_at_start: 0 },
+  {
+    meeting_key: 1,
+    session_key: SESSION_KEY,
+    driver_number: 1,
+    stint_number: 1,
+    lap_start: 1,
+    lap_end: 2,
+    compound: 'SOFT',
+    tyre_age_at_start: 0,
+  },
+  {
+    meeting_key: 1,
+    session_key: SESSION_KEY,
+    driver_number: 44,
+    stint_number: 1,
+    lap_start: 1,
+    lap_end: 2,
+    compound: 'MEDIUM',
+    tyre_age_at_start: 0,
+  },
+  {
+    meeting_key: 1,
+    session_key: SESSION_KEY,
+    driver_number: 16,
+    stint_number: 1,
+    lap_start: 1,
+    lap_end: 1,
+    compound: 'HARD',
+    tyre_age_at_start: 0,
+  },
 ];
 
 // ─── 공통 mock 설정 헬퍼 ──────────────────────────────────────────────────────
@@ -71,12 +279,12 @@ describe('SessionsService', () => {
 
   beforeEach(async () => {
     mockClient = {
-      fetchSessions:    jest.fn(),
-      fetchDrivers:     jest.fn(),
-      fetchLaps:        jest.fn(),
-      fetchIntervals:   jest.fn(),
-      fetchStints:      jest.fn(),
-      fetchCarData:     jest.fn(),
+      fetchSessions: jest.fn(),
+      fetchDrivers: jest.fn(),
+      fetchLaps: jest.fn(),
+      fetchIntervals: jest.fn(),
+      fetchStints: jest.fn(),
+      fetchCarData: jest.fn(),
       fetchRaceControl: jest.fn(),
       preloadReplayData: jest.fn(),
     } as any;
@@ -93,12 +301,22 @@ describe('SessionsService', () => {
 
   // ── 1. getSessions ──────────────────────────────────────────────────────────
   it('getSessions: 연도·국가 필터를 파라미터로 전달하고 OpenF1 응답을 그대로 반환한다', async () => {
-    const raw = [{ session_key: SESSION_KEY, session_name: 'Race', country_name: 'Japan', year: 2024 }];
+    const raw = [
+      {
+        session_key: SESSION_KEY,
+        session_name: 'Race',
+        country_name: 'Japan',
+        year: 2024,
+      },
+    ];
     mockClient.fetchSessions.mockResolvedValue(raw as any);
 
     const result = await service.getSessions('Japan', '2024');
 
-    expect(mockClient.fetchSessions).toHaveBeenCalledWith({ country_name: 'Japan', year: '2024' });
+    expect(mockClient.fetchSessions).toHaveBeenCalledWith({
+      country_name: 'Japan',
+      year: '2024',
+    });
     expect(result).toEqual(raw);
   });
 
@@ -110,8 +328,13 @@ describe('SessionsService', () => {
 
     expect(result).toHaveLength(3);
     // F1TransformationsUtil.transformDriverData: name_acronym → name, team_colour → teamColor
-    expect(result[0]).toMatchObject({ name: 'VER', teamColor: expect.stringContaining('3671C6') });
-    expect(mockClient.fetchDrivers).toHaveBeenCalledWith({ session_key: SESSION_KEY });
+    expect(result[0]).toMatchObject({
+      name: 'VER',
+      teamColor: expect.stringContaining('3671C6'),
+    });
+    expect(mockClient.fetchDrivers).toHaveBeenCalledWith({
+      session_key: SESSION_KEY,
+    });
   });
 
   // ── 3. getDriverTimings: 프레임 배열 구조 검증 ──────────────────────────────
@@ -211,7 +434,9 @@ describe('SessionsService', () => {
 
     const { frames } = await service.getDriverTimings(SESSION_KEY);
     // 레이스 종료 후 프레임(displayDataLap=2): VER 랩1=90s, 랩2=89s → bestLap=89s → "1:29.000"
-    const endFrame = frames.find((f) => f.currentLap === 2 && f.timeOffset > 179);
+    const endFrame = frames.find(
+      (f) => f.currentLap === 2 && f.timeOffset > 179,
+    );
     expect(endFrame).toBeDefined();
     const ver = endFrame!.drivers.find((d) => d.driverCode === 'VER');
     expect(ver).toBeDefined();
@@ -222,7 +447,16 @@ describe('SessionsService', () => {
   it('getDriverTimings: 알 수 없는 compound는 "UNKNOWN"으로 정상화된다', async () => {
     const stintsWithUnknown: OpenF1Stint[] = [
       ...STINTS,
-      { meeting_key: 1, session_key: SESSION_KEY, driver_number: 16, stint_number: 2, lap_start: 2, lap_end: 2, compound: 'HYPERSOFT', tyre_age_at_start: 0 },
+      {
+        meeting_key: 1,
+        session_key: SESSION_KEY,
+        driver_number: 16,
+        stint_number: 2,
+        lap_start: 2,
+        lap_end: 2,
+        compound: 'HYPERSOFT',
+        tyre_age_at_start: 0,
+      },
     ];
     mockClient.fetchLaps.mockResolvedValue(LAPS);
     mockClient.fetchIntervals.mockResolvedValue(INTERVALS);
@@ -260,11 +494,46 @@ describe('SessionsService', () => {
   it('getDriverTimings: 2초 이내에 들어온 interval들은 하나의 프레임으로 그룹핑된다', async () => {
     // 0.5초 간격으로 연속된 interval 5개 → 같은 윈도우이므로 1개 프레임만 생성
     const denseIntervals: OpenF1Interval[] = [
-      { meeting_key: 1, session_key: SESSION_KEY, driver_number: 1,  date: t(30),   gap_to_leader: null, interval: 0 },
-      { meeting_key: 1, session_key: SESSION_KEY, driver_number: 44, date: t(30.5), gap_to_leader: 3.0,  interval: 3.0 },
-      { meeting_key: 1, session_key: SESSION_KEY, driver_number: 16, date: t(31),   gap_to_leader: 1.5,  interval: 1.5 },
-      { meeting_key: 1, session_key: SESSION_KEY, driver_number: 1,  date: t(31.5), gap_to_leader: null, interval: 0 },
-      { meeting_key: 1, session_key: SESSION_KEY, driver_number: 44, date: t(32),   gap_to_leader: 3.1,  interval: 3.1 },
+      {
+        meeting_key: 1,
+        session_key: SESSION_KEY,
+        driver_number: 1,
+        date: t(30),
+        gap_to_leader: 0,
+        interval: 0,
+      },
+      {
+        meeting_key: 1,
+        session_key: SESSION_KEY,
+        driver_number: 44,
+        date: t(30.5),
+        gap_to_leader: 3.0,
+        interval: 3.0,
+      },
+      {
+        meeting_key: 1,
+        session_key: SESSION_KEY,
+        driver_number: 16,
+        date: t(31),
+        gap_to_leader: 1.5,
+        interval: 1.5,
+      },
+      {
+        meeting_key: 1,
+        session_key: SESSION_KEY,
+        driver_number: 1,
+        date: t(31.5),
+        gap_to_leader: 0,
+        interval: 0,
+      },
+      {
+        meeting_key: 1,
+        session_key: SESSION_KEY,
+        driver_number: 44,
+        date: t(32),
+        gap_to_leader: 3.1,
+        interval: 3.1,
+      },
     ];
     mockClient.fetchLaps.mockResolvedValue(LAPS);
     mockClient.fetchIntervals.mockResolvedValue(denseIntervals);
@@ -274,7 +543,9 @@ describe('SessionsService', () => {
     const { frames } = await service.getDriverTimings(SESSION_KEY);
 
     // 30~32s 구간(2초 내)은 프레임 1개
-    const windowFrames = frames.filter((f) => f.timeOffset >= 30 && f.timeOffset < 32);
+    const windowFrames = frames.filter(
+      (f) => f.timeOffset >= 30 && f.timeOffset < 32,
+    );
     expect(windowFrames.length).toBe(1);
   });
 
@@ -345,10 +616,14 @@ describe('SessionsService', () => {
 
     const { frames } = await service.getDriverTimings(SESSION_KEY);
     // t=120s 프레임: HAM gap_to_leader=5.8 → "+5.800", LEC gap_to_leader=2.9 → "+2.900"
-    const midFrame = frames.find((f) => f.timeOffset >= 120 && f.timeOffset < 179);
+    const midFrame = frames.find(
+      (f) => f.timeOffset >= 120 && f.timeOffset < 179,
+    );
     expect(midFrame).toBeDefined();
 
-    const nonLeaders = midFrame!.drivers.filter((d) => d.position > 1);
+    const nonLeaders = midFrame!.drivers.filter(
+      (d) => d.position > 1 && d.currentLapTime !== 'DNF',
+    );
     expect(nonLeaders.length).toBeGreaterThan(0);
     nonLeaders.forEach((row) => {
       expect(row.interval).toMatch(/^\+\d+\.\d{3}$/);
@@ -359,10 +634,46 @@ describe('SessionsService', () => {
   it('getDriverTimings: 완료된 stint 수가 tireInfo.pitStops에 반영된다', async () => {
     // HAM이 랩1 → 랩2 전환 시 피트인(stint 1 종료, stint 2 시작)
     const stintsWithPit: OpenF1Stint[] = [
-      { meeting_key: 1, session_key: SESSION_KEY, driver_number: 1,  stint_number: 1, lap_start: 1, lap_end: 2, compound: 'SOFT',   tyre_age_at_start: 0 },
-      { meeting_key: 1, session_key: SESSION_KEY, driver_number: 44, stint_number: 1, lap_start: 1, lap_end: 1, compound: 'SOFT',   tyre_age_at_start: 0 },
-      { meeting_key: 1, session_key: SESSION_KEY, driver_number: 44, stint_number: 2, lap_start: 2, lap_end: 2, compound: 'MEDIUM', tyre_age_at_start: 0 },
-      { meeting_key: 1, session_key: SESSION_KEY, driver_number: 16, stint_number: 1, lap_start: 1, lap_end: 1, compound: 'HARD',   tyre_age_at_start: 0 },
+      {
+        meeting_key: 1,
+        session_key: SESSION_KEY,
+        driver_number: 1,
+        stint_number: 1,
+        lap_start: 1,
+        lap_end: 2,
+        compound: 'SOFT',
+        tyre_age_at_start: 0,
+      },
+      {
+        meeting_key: 1,
+        session_key: SESSION_KEY,
+        driver_number: 44,
+        stint_number: 1,
+        lap_start: 1,
+        lap_end: 1,
+        compound: 'SOFT',
+        tyre_age_at_start: 0,
+      },
+      {
+        meeting_key: 1,
+        session_key: SESSION_KEY,
+        driver_number: 44,
+        stint_number: 2,
+        lap_start: 2,
+        lap_end: 2,
+        compound: 'MEDIUM',
+        tyre_age_at_start: 0,
+      },
+      {
+        meeting_key: 1,
+        session_key: SESSION_KEY,
+        driver_number: 16,
+        stint_number: 1,
+        lap_start: 1,
+        lap_end: 1,
+        compound: 'HARD',
+        tyre_age_at_start: 0,
+      },
     ];
     mockClient.fetchLaps.mockResolvedValue(LAPS);
     mockClient.fetchIntervals.mockResolvedValue(INTERVALS);
@@ -390,22 +701,62 @@ describe('LapsService', () => {
   let mockClient: jest.Mocked<CachedOpenF1ClientService>;
 
   const RAW_LAPS = [
-    { session_key: SESSION_KEY, driver_number: 1,  lap_number: 1, lap_duration: 90.123,  date_start: t(0),  is_pit_out_lap: false, duration_sector_1: 28.1, duration_sector_2: 32.0, duration_sector_3: 30.0 },
-    { session_key: SESSION_KEY, driver_number: 1,  lap_number: 2, lap_duration: 89.456,  date_start: t(90), is_pit_out_lap: false, duration_sector_1: 27.5, duration_sector_2: 31.0, duration_sector_3: 30.9 },
+    {
+      session_key: SESSION_KEY,
+      driver_number: 1,
+      lap_number: 1,
+      lap_duration: 90.123,
+      date_start: t(0),
+      is_pit_out_lap: false,
+      duration_sector_1: 28.1,
+      duration_sector_2: 32.0,
+      duration_sector_3: 30.0,
+    },
+    {
+      session_key: SESSION_KEY,
+      driver_number: 1,
+      lap_number: 2,
+      lap_duration: 89.456,
+      date_start: t(90),
+      is_pit_out_lap: false,
+      duration_sector_1: 27.5,
+      duration_sector_2: 31.0,
+      duration_sector_3: 30.9,
+    },
     // pit out lap — lap_duration이 있어도 isDNF=false
-    { session_key: SESSION_KEY, driver_number: 44, lap_number: 2, lap_duration: 105.0,   date_start: t(93), is_pit_out_lap: true,  duration_sector_1: 35.0, duration_sector_2: 38.0, duration_sector_3: 32.0 },
+    {
+      session_key: SESSION_KEY,
+      driver_number: 44,
+      lap_number: 2,
+      lap_duration: 105.0,
+      date_start: t(93),
+      is_pit_out_lap: true,
+      duration_sector_1: 35.0,
+      duration_sector_2: 38.0,
+      duration_sector_3: 32.0,
+    },
     // DNF — lap_duration=null, is_pit_out_lap=false
-    { session_key: SESSION_KEY, driver_number: 16, lap_number: 2, lap_duration: null,    date_start: t(91), is_pit_out_lap: false, duration_sector_1: null, duration_sector_2: null, duration_sector_3: null },
+    {
+      session_key: SESSION_KEY,
+      driver_number: 16,
+      lap_number: 2,
+      lap_duration: null,
+      date_start: t(91),
+      is_pit_out_lap: false,
+      duration_sector_1: null,
+      duration_sector_2: null,
+      duration_sector_3: null,
+    },
   ];
 
   beforeEach(async () => {
     mockClient = {
-      fetchSessions:    jest.fn(),
-      fetchDrivers:     jest.fn(),
-      fetchLaps:        jest.fn(),
-      fetchIntervals:   jest.fn(),
-      fetchStints:      jest.fn(),
-      fetchCarData:     jest.fn(),
+      fetchSessions: jest.fn(),
+      fetchDrivers: jest.fn(),
+      fetchLaps: jest.fn(),
+      fetchIntervals: jest.fn(),
+      fetchStints: jest.fn(),
+      fetchCarData: jest.fn(),
       fetchRaceControl: jest.fn(),
       preloadReplayData: jest.fn(),
     } as any;
@@ -442,7 +793,9 @@ describe('LapsService', () => {
     mockClient.fetchLaps.mockResolvedValue(RAW_LAPS as any);
 
     const result = await service.getSessionLaps(SESSION_KEY);
-    const dnfLap = result.find((l) => l.driverNumber === 16 && l.lapNumber === 2);
+    const dnfLap = result.find(
+      (l) => l.driverNumber === 16 && l.lapNumber === 2,
+    );
 
     expect(dnfLap).toBeDefined();
     expect(dnfLap!.isDNF).toBe(true);
@@ -454,7 +807,9 @@ describe('LapsService', () => {
     mockClient.fetchLaps.mockResolvedValue(RAW_LAPS as any);
 
     const result = await service.getSessionLaps(SESSION_KEY);
-    const pitLap = result.find((l) => l.driverNumber === 44 && l.lapNumber === 2);
+    const pitLap = result.find(
+      (l) => l.driverNumber === 44 && l.lapNumber === 2,
+    );
 
     expect(pitLap).toBeDefined();
     expect(pitLap!.isPitOutLap).toBe(true);

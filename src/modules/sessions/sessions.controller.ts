@@ -1,12 +1,16 @@
 import { Controller, Get, Query, Param, Post, ParseIntPipe } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiParam, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { SessionsService } from './sessions.service';
+import { RaceFlagsService } from './race-flags.service';
 import { ApiResponseDto } from '../../common/dto/api-response.dto';
 
 @ApiTags('sessions')
 @Controller('sessions')
 export class SessionsController {
-  constructor(private readonly sessionsService: SessionsService) {}
+  constructor(
+    private readonly sessionsService: SessionsService,
+    private readonly raceFlagsService: RaceFlagsService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: '세션 목록 조회', description: '국가명·연도로 필터링 가능한 F1 세션 목록 반환' })
@@ -70,6 +74,26 @@ export class SessionsController {
   async getDriverTimings(@Param('sessionKey', ParseIntPipe) sessionKey: number) {
     try {
       const data = await this.sessionsService.getDriverTimings(sessionKey);
+      return ApiResponseDto.success(data);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  @Get(':sessionKey/race-flags')
+  @ApiOperation({
+    summary: '레이스 플래그 정보 조회',
+    description: [
+      'OpenF1 race_control 메시지를 기반으로 세션의 플래그 상태를 랩별/분별로 반환.',
+      '레이스: lapFlags 배열, 퀄리파잉/연습: minuteFlags 배열.',
+      '결과는 10분간 인메모리 캐시됩니다.',
+    ].join(' '),
+  })
+  @ApiParam({ name: 'sessionKey', description: '세션 고유 식별자' })
+  @ApiResponse({ status: 200, description: '플래그 정보 반환 성공' })
+  async getRaceFlags(@Param('sessionKey', ParseIntPipe) sessionKey: number) {
+    try {
+      const data = await this.raceFlagsService.getRaceFlags(sessionKey);
       return ApiResponseDto.success(data);
     } catch (error) {
       throw error;
