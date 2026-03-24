@@ -1,34 +1,21 @@
 import { Injectable } from '@nestjs/common';
 import { BaseF1Service } from '../../common/services/base-f1.service';
 import { CachedOpenF1ClientService } from '../../common/services/cached-openf1-client.service';
+import { OpenF1CarData } from '../../common/interfaces/openf1.interface';
 import { F1TransformationsUtil } from '../../common/utils/f1-transformations.util';
-
-export interface TelemetryFrame {
-  timeOffset: number;
-  speed: number;
-  gear: number;
-  throttle: number;
-  brake: number;
-  drsEnabled: boolean;
-  drsAvailable: boolean;
-}
-
-export interface DriverTelemetryResponse {
-  driverNumber: number;
-  driverCode: string;
-  teamColor: string;
-  frames: TelemetryFrame[];
-}
+import type { TelemetryFrame, DriverTelemetryResponse } from './interfaces/telemetry.interface';
 
 interface CacheEntry {
   data: DriverTelemetryResponse;
   cachedAt: number;
 }
 
+const CLUSTER_THRESHOLD_MS = 10_000; // 10초
+const FRAME_INTERVAL_SEC = 0.5;
+
 @Injectable()
 export class TelemetryService extends BaseF1Service {
   private readonly CACHE_TTL_MS = 10 * 60 * 1000; // 10분
-  private readonly FRAME_INTERVAL_SEC = 0.5; // 0.5초 간격 다운샘플링
 
   // 드라이버별 텔레메트리 캐시: `${sessionKey}_${driverNumber}` → CacheEntry
   private readonly telemetryCache = new Map<string, CacheEntry>();
@@ -81,7 +68,7 @@ export class TelemetryService extends BaseF1Service {
         const response: DriverTelemetryResponse = {
           driverNumber: driver.driver_number,
           driverCode: driver.name_acronym,
-          teamColor: driver.team_colour,
+          teamColor: `#${driver.team_colour}`,
           frames,
         };
 
@@ -93,7 +80,7 @@ export class TelemetryService extends BaseF1Service {
 
         return response;
       },
-      `get driver telemetry for driver ${driverNumber} in session ${sessionKey}`,
+      'get driver telemetry',
       { sessionKey, driverNumber },
     );
   }
@@ -130,7 +117,6 @@ export class TelemetryService extends BaseF1Service {
   private findClusteredRaceStart(timestamps: number[]): number {
     if (timestamps.length <= 1) return timestamps[0];
 
-    const CLUSTER_THRESHOLD = 10000; // 10초 (ms)
     const sorted = [...timestamps].sort((a, b) => a - b);
 
     let bestClusterStart = 0;
@@ -138,7 +124,7 @@ export class TelemetryService extends BaseF1Service {
 
     let clusterStart = 0;
     for (let i = 1; i < sorted.length; i++) {
-      if (sorted[i] - sorted[clusterStart] > CLUSTER_THRESHOLD) {
+      if (sorted[i] - sorted[clusterStart] > CLUSTER_THRESHOLD_MS) {
         const clusterSize = i - clusterStart;
         if (clusterSize > bestClusterSize) {
           bestClusterSize = clusterSize;
@@ -157,7 +143,7 @@ export class TelemetryService extends BaseF1Service {
   }
 
   private downsampleCarData(
-    carData: { date: string; speed: number; n_gear: number; throttle: number; brake: number; drs: number }[],
+    carData: OpenF1CarData[],
     raceStartMs: number,
   ): TelemetryFrame[] {
     if (carData.length === 0) return [];
@@ -177,17 +163,17 @@ export class TelemetryService extends BaseF1Service {
 
     if (sorted.length === 0) return [];
 
-    // 2초 간격으로 다운샘플링 (이진탐색으로 가장 가까운 포인트 선택)
+    // 0.5초 간격으로 다운샘플링 (이진탐색으로 가장 가까운 포인트 선택)
     const maxTimeOffset = sorted[sorted.length - 1].timeOffset;
     const frames: TelemetryFrame[] = [];
 
-    for (let t = 0; t <= maxTimeOffset; t += this.FRAME_INTERVAL_SEC) {
+    for (let t = 0; t <= maxTimeOffset; t += FRAME_INTERVAL_SEC) {
       const idx = this.findClosestIndex(sorted, t);
       const entry = sorted[idx];
       const drsState = F1TransformationsUtil.transformDRS(entry.drs);
 
       frames.push({
-        timeOffset: Math.round(t * 10) / 10, // 소수점 1자리
+        timeOffset: Math.round(t * 10) / 10,
         speed: entry.speed,
         gear: entry.gear,
         throttle: entry.throttle,

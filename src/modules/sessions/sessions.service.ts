@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { BaseF1Service } from '../../common/services/base-f1.service';
 import { CachedOpenF1ClientService } from '../../common/services/cached-openf1-client.service';
 import {
@@ -13,6 +13,15 @@ import {
   OpenF1Driver,
   OpenF1Stint,
 } from '../../common/interfaces/openf1.interface';
+import type {
+  SectorPerformance,
+  TireCompound,
+  TireInfo,
+  MiniSector,
+  DriverDisplayRow,
+  DriverDisplayFrame,
+  DriverTimingsResponse,
+} from './interfaces/driver-display.interface';
 
 // 내부 헬퍼 타입 (private)
 interface LapTimingDto {
@@ -20,16 +29,8 @@ interface LapTimingDto {
   teamColor: string;
   currentLapTime: string;
   bestLapTime: string;
-  miniSector: {
-    sector1: 'fastest' | 'personal_best' | 'normal' | 'none';
-    sector2: 'fastest' | 'personal_best' | 'normal' | 'none';
-    sector3: 'fastest' | 'personal_best' | 'normal' | 'none';
-  };
-  tireInfo: {
-    compound: 'SOFT' | 'MEDIUM' | 'HARD' | 'INTERMEDIATE' | 'WET' | 'UNKNOWN';
-    lapCount: number;
-    pitStops: number;
-  };
+  miniSector: MiniSector;
+  tireInfo: TireInfo;
 }
 
 interface StandingEntry {
@@ -39,36 +40,10 @@ interface StandingEntry {
   intervalToAhead: string;
 }
 
-// 프론트엔드에 반환하는 타입 (public)
-export interface DriverDisplayRow {
-  position: number;
-  driverCode: string;
-  teamColor: string;
-  interval: string;
-  intervalToAhead: string;
-  currentLapTime: string;
-  bestLapTime: string;
-  miniSector: {
-    sector1: 'fastest' | 'personal_best' | 'normal' | 'none';
-    sector2: 'fastest' | 'personal_best' | 'normal' | 'none';
-    sector3: 'fastest' | 'personal_best' | 'normal' | 'none';
-  };
-  tireInfo: {
-    compound: 'SOFT' | 'MEDIUM' | 'HARD' | 'INTERMEDIATE' | 'WET' | 'UNKNOWN';
-    lapCount: number;
-    pitStops: number;
-  };
-}
-
-export interface DriverDisplayFrame {
-  timeOffset: number; // 레이스 시작 기준 경과 초
-  currentLap: number; // 현재 진행 중인 랩 번호
-  drivers: DriverDisplayRow[]; // position 순 정렬 완료
-}
-
-export interface DriverTimingsResponse {
-  frames: DriverDisplayFrame[];
-}
+const VALID_COMPOUNDS = new Set<string>(['SOFT', 'MEDIUM', 'HARD', 'INTERMEDIATE', 'WET']);
+const BLANK_SECTOR: MiniSector = { sector1: 'none', sector2: 'none', sector3: 'none' };
+const DEFAULT_TIRE_INFO: TireInfo = { compound: 'UNKNOWN', lapCount: 0, pitStops: 0 };
+const WINDOW_MS = 2000;
 
 @Injectable()
 export class SessionsService extends BaseF1Service {
@@ -92,7 +67,10 @@ export class SessionsService extends BaseF1Service {
 
         const sessions = await this.cachedOpenf1Client.fetchSessions(params);
 
-        return sessions;
+        return sessions.filter((s: { session_type?: string }) => {
+          const type = s.session_type?.toLowerCase() ?? '';
+          return [...SessionsService.REPLAYABLE_TYPES].some((t) => type.includes(t));
+        });
       },
       'fetch sessions',
       { country, year },
@@ -105,7 +83,6 @@ export class SessionsService extends BaseF1Service {
         const params: DriversQueryParams = { session_key: sessionKey };
         const drivers = await this.cachedOpenf1Client.fetchDrivers(params);
 
-        // Transform drivers using shared utility
         return drivers.map((driver) =>
           F1TransformationsUtil.transformDriverData(driver),
         );
@@ -123,6 +100,9 @@ export class SessionsService extends BaseF1Service {
         if (cached && Date.now() - cached.cachedAt < this.FRAMES_CACHE_TTL_MS) {
           return { frames: cached.frames };
         }
+
+        // 세션 타입 확인: 연습주행(Practice)은 리플레이 미지원
+        await this.validateReplayableSession(sessionKey);
 
         // 순차 호출: Promise.all은 4개 동시 요청으로 OpenF1 429 유발
         const laps = await this.cachedOpenf1Client.fetchLaps({ session_key: sessionKey });
@@ -157,7 +137,7 @@ export class SessionsService extends BaseF1Service {
       .filter((t) => t > 0 && Number.isFinite(t));
     if (lap1ValidTimes.length === 0) return [];
     const raceStartMs = Math.min(...lap1ValidTimes);
-    const maxLap = Math.max(...allLaps.map((l) => l.lap_number).filter((n) => Number.isFinite(n)));
+    const maxLap = this.getMaxLapNumber(allLaps);
 
     // 전 랩 완료 데이터 사전 계산
     const lapTimingsMap = new Map<number, LapTimingDto[]>();
@@ -179,40 +159,22 @@ export class SessionsService extends BaseF1Service {
     lapStartTimes.sort((a, b) => a.ms - b.ms);
 
     // 레이스 종료 시각: 리더가 maxLap를 완주한 시점
-    const finalLapTimings = lapTimingsMap.get(maxLap) ?? [];
-    const leaderCode = finalLapTimings.find((t) => t.currentLapTime !== 'DNF')?.driverCode;
-    let raceEndMs = Infinity;
-    if (leaderCode) {
-      const leaderDriver = drivers.find((d) => d.name_acronym === leaderCode);
-      if (leaderDriver) {
-        const leaderMaxLapRow = allLaps.find(
-          (l) => l.driver_number === leaderDriver.driver_number && l.lap_number === maxLap,
-        );
-        if (leaderMaxLapRow?.lap_duration) {
-          raceEndMs =
-            new Date(leaderMaxLapRow.date_start).getTime() +
-            leaderMaxLapRow.lap_duration * 1000;
-        }
-      }
-    }
+    const raceEndMs = this.computeRaceEndMs(lapTimingsMap.get(maxLap) ?? [], maxLap, allLaps, drivers);
 
     // intervals 시간순 정렬, 2초 윈도우 그룹핑
-    const sorted = [...allIntervals].sort(
+    const sortedIntervals = [...allIntervals].sort(
       (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
     );
 
     const frames: DriverDisplayFrame[] = [];
     const currentState = new Map<number, OpenF1Interval>();
     let lastSnapshotMs = -Infinity;
-    const WINDOW_MS = 2000;
-    const BLANK_SECTOR = { sector1: 'none', sector2: 'none', sector3: 'none' } as const;
 
-    for (const interval of sorted) {
+    for (const interval of sortedIntervals) {
       const intervalMs = new Date(interval.date).getTime();
       currentState.set(interval.driver_number, interval);
 
       // 레이스 시작 전 interval은 상태만 업데이트하고 프레임 생성 제외
-      // (예선, 포메이션 랩 등 pre-race 데이터가 섞이는 것 방지)
       if (intervalMs < raceStartMs) continue;
 
       if (intervalMs - lastSnapshotMs < WINDOW_MS) continue;
@@ -258,11 +220,7 @@ export class SessionsService extends BaseF1Service {
           currentLapTime: lap?.currentLapTime ?? '--:--:---',
           bestLapTime: lap?.bestLapTime ?? '--:--:---',
           miniSector: lap?.miniSector ?? BLANK_SECTOR,
-          tireInfo: cur?.tireInfo ?? {
-            compound: 'UNKNOWN' as const,
-            lapCount: 0,
-            pitStops: 0,
-          },
+          tireInfo: cur?.tireInfo ?? DEFAULT_TIRE_INFO,
         };
       });
 
@@ -279,6 +237,52 @@ export class SessionsService extends BaseF1Service {
     }
 
     return frames;
+  }
+
+  private computeRaceEndMs(
+    finalLapTimings: LapTimingDto[],
+    maxLap: number,
+    allLaps: OpenF1Lap[],
+    drivers: OpenF1Driver[],
+  ): number {
+    const leaderCode = finalLapTimings.find((t) => t.currentLapTime !== 'DNF')?.driverCode;
+    if (!leaderCode) return Infinity;
+
+    const leaderDriver = drivers.find((d) => d.name_acronym === leaderCode);
+    if (!leaderDriver) return Infinity;
+
+    const leaderMaxLapRow = allLaps.find(
+      (l) => l.driver_number === leaderDriver.driver_number && l.lap_number === maxLap,
+    );
+    if (!leaderMaxLapRow?.lap_duration) return Infinity;
+
+    return new Date(leaderMaxLapRow.date_start).getTime() + leaderMaxLapRow.lap_duration * 1000;
+  }
+
+  private static readonly REPLAYABLE_TYPES = new Set(['race', 'sprint', 'qualifying', 'shootout']);
+
+  private async validateReplayableSession(sessionKey: number): Promise<void> {
+    const sessions = await this.cachedOpenf1Client.fetchSessions({ session_key: sessionKey });
+    const session = sessions[0];
+    if (!session) {
+      throw new HttpException(
+        `Session ${sessionKey} not found`,
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    const sessionType = session.session_type?.toLowerCase() ?? '';
+    const isReplayable = [...SessionsService.REPLAYABLE_TYPES].some((t) => sessionType.includes(t));
+    if (!isReplayable) {
+      throw new HttpException(
+        `Session type "${session.session_type}" does not support replay. Only Race, Sprint, and Qualifying sessions are supported.`,
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
+  private getMaxLapNumber(laps: OpenF1Lap[]): number {
+    return Math.max(...laps.map((l) => l.lap_number).filter((n) => Number.isFinite(n)));
   }
 
   // 랩 완료 데이터: lapTime, miniSector, tireInfo (내부 헬퍼)
@@ -314,8 +318,8 @@ export class SessionsService extends BaseF1Service {
     }
 
     const sortedIntervals = Array.from(latestIntervalByDriver.values()).sort((a, b) => {
-      const ga = a.gap_to_leader === null ? null : Number(a.gap_to_leader);
-      const gb = b.gap_to_leader === null ? null : Number(b.gap_to_leader);
+      const ga = toNumericGap(a.gap_to_leader);
+      const gb = toNumericGap(b.gap_to_leader);
       if (ga === null || isNaN(ga)) return -1;
       if (gb === null || isNaN(gb)) return 1;
       return ga - gb;
@@ -323,9 +327,9 @@ export class SessionsService extends BaseF1Service {
 
     const timings: LapTimingDto[] = [];
 
-    sortedIntervals.forEach((interval) => {
+    for (const interval of sortedIntervals) {
       const driver = drivers.find((d) => d.driver_number === interval.driver_number);
-      if (!driver) return;
+      if (!driver) continue;
 
       const driverLaps = allLaps.filter((l) => l.driver_number === interval.driver_number);
       const lapAtN = driverLaps.find((l) => l.lap_number === lapNum);
@@ -374,31 +378,25 @@ export class SessionsService extends BaseF1Service {
           sector3: isRetired ? 'none' : this.getSectorPerformance(lapAtN?.segments_sector_3),
         },
         tireInfo: {
-          compound: this.normalizeCompound(activeStint?.compound),
+          compound: normalizeCompound(activeStint?.compound),
           lapCount: activeStint
             ? lapNum - activeStint.lap_start + 1 + activeStint.tyre_age_at_start
             : 0,
           pitStops,
         },
       });
-    });
+    }
 
     // DNF 드라이버를 뒤로 정렬
     const nonDnf = timings.filter((t) => t.currentLapTime !== 'DNF');
-    const dnf = timings.filter((t) => t.currentLapTime === 'DNF');
+    const dnf = timings.filter((t) => t.currentLapTime !== 'DNF' ? false : true);
     return [...nonDnf, ...dnf];
   }
 
   private buildStandings(intervals: OpenF1Interval[], drivers: OpenF1Driver[]): StandingEntry[] {
-    const toNum = (v: unknown): number | null => {
-      if (v === null || v === undefined) return null;
-      const n = Number(v);
-      return isNaN(n) ? null : n;
-    };
-
     const sorted = [...intervals].sort((a, b) => {
-      const ga = toNum(a.gap_to_leader);
-      const gb = toNum(b.gap_to_leader);
+      const ga = toNumericGap(a.gap_to_leader);
+      const gb = toNumericGap(b.gap_to_leader);
       // null gap → 맨 뒤로 (DNF/데이터 없음). 리더는 gap_to_leader=0
       if (ga === null && gb === null) return 0;
       if (ga === null) return 1;
@@ -407,13 +405,13 @@ export class SessionsService extends BaseF1Service {
     });
 
     const standings: StandingEntry[] = [];
-    sorted.forEach((interval, index) => {
+    for (const [index, interval] of sorted.entries()) {
       const driver = drivers.find((d) => d.driver_number === interval.driver_number);
-      if (!driver) return;
+      if (!driver) continue;
 
       const isLeader = index === 0;
-      const gap = toNum((interval as any).gap_to_leader);
-      const intv = toNum((interval as any).interval);
+      const gap = toNumericGap(interval.gap_to_leader);
+      const intv = toNumericGap(interval.interval);
 
       standings.push({
         driverCode: driver.name_acronym,
@@ -421,25 +419,17 @@ export class SessionsService extends BaseF1Service {
         interval: isLeader ? '--' : gap !== null ? `+${gap.toFixed(3)}` : '--',
         intervalToAhead: isLeader ? '' : intv !== null ? `+${intv.toFixed(3)}` : '--',
       });
-    });
+    }
 
     return standings;
   }
 
-  private getSectorPerformance(segments?: number[]): 'fastest' | 'personal_best' | 'normal' | 'none' {
+  private getSectorPerformance(segments?: number[]): SectorPerformance {
     if (!segments?.length) return 'none';
     if (segments.some((s) => s === 2051)) return 'fastest';
     if (segments.some((s) => s === 2049)) return 'personal_best';
     if (segments.some((s) => s === 2048)) return 'normal';
     return 'none';
-  }
-
-  private normalizeCompound(
-    compound?: string,
-  ): 'SOFT' | 'MEDIUM' | 'HARD' | 'INTERMEDIATE' | 'WET' | 'UNKNOWN' {
-    const valid = ['SOFT', 'MEDIUM', 'HARD', 'INTERMEDIATE', 'WET'] as const;
-    const upper = compound?.toUpperCase();
-    return valid.includes(upper as any) ? (upper as any) : 'UNKNOWN';
   }
 
   private formatLapTime(seconds: number): string {
@@ -485,4 +475,15 @@ export class SessionsService extends BaseF1Service {
       { sessionKey },
     );
   }
+}
+
+function toNumericGap(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  const n = Number(value);
+  return isNaN(n) ? null : n;
+}
+
+function normalizeCompound(compound?: string): TireCompound {
+  const upper = compound?.toUpperCase();
+  return upper && VALID_COMPOUNDS.has(upper) ? (upper as TireCompound) : 'UNKNOWN';
 }

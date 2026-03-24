@@ -264,7 +264,22 @@ const STINTS: OpenF1Stint[] = [
 
 // ─── 공통 mock 설정 헬퍼 ──────────────────────────────────────────────────────
 
+const RACE_SESSION = {
+  meeting_key: 1,
+  session_key: SESSION_KEY,
+  session_name: 'Race',
+  session_type: 'Race',
+  location: 'Suzuka',
+  circuit_short_name: 'suzuka',
+  country_name: 'Japan',
+  country_code: 'JPN',
+  date_start: RACE_START,
+  date_end: '2024-04-07T06:00:00.000Z',
+  year: 2024,
+};
+
 function setupDefaultMocks(mockClient: jest.Mocked<CachedOpenF1ClientService>) {
+  mockClient.fetchSessions.mockResolvedValue([RACE_SESSION] as any);
   mockClient.fetchLaps.mockResolvedValue(LAPS);
   mockClient.fetchIntervals.mockResolvedValue(INTERVALS);
   mockClient.fetchDrivers.mockResolvedValue(DRIVERS);
@@ -305,6 +320,14 @@ describe('SessionsService', () => {
       {
         session_key: SESSION_KEY,
         session_name: 'Race',
+        session_type: 'Race',
+        country_name: 'Japan',
+        year: 2024,
+      },
+      {
+        session_key: 9999,
+        session_name: 'Practice 1',
+        session_type: 'Practice',
         country_name: 'Japan',
         year: 2024,
       },
@@ -317,7 +340,8 @@ describe('SessionsService', () => {
       country_name: 'Japan',
       year: '2024',
     });
-    expect(result).toEqual(raw);
+    // Practice 세션은 필터링되어야 한다
+    expect(result).toEqual([raw[0]]);
   });
 
   // ── 2. getSessionDrivers ────────────────────────────────────────────────────
@@ -458,6 +482,7 @@ describe('SessionsService', () => {
         tyre_age_at_start: 0,
       },
     ];
+    mockClient.fetchSessions.mockResolvedValue([RACE_SESSION] as any);
     mockClient.fetchLaps.mockResolvedValue(LAPS);
     mockClient.fetchIntervals.mockResolvedValue(INTERVALS);
     mockClient.fetchDrivers.mockResolvedValue(DRIVERS);
@@ -535,6 +560,7 @@ describe('SessionsService', () => {
         interval: 3.1,
       },
     ];
+    mockClient.fetchSessions.mockResolvedValue([RACE_SESSION] as any);
     mockClient.fetchLaps.mockResolvedValue(LAPS);
     mockClient.fetchIntervals.mockResolvedValue(denseIntervals);
     mockClient.fetchDrivers.mockResolvedValue(DRIVERS);
@@ -551,6 +577,7 @@ describe('SessionsService', () => {
 
   // ── 13. intervals 비어있으면 frames 빈 배열 ──────────────────────────────────
   it('getDriverTimings: intervals가 비어있으면 frames 빈 배열을 반환한다', async () => {
+    mockClient.fetchSessions.mockResolvedValue([RACE_SESSION] as any);
     mockClient.fetchLaps.mockResolvedValue(LAPS);
     mockClient.fetchIntervals.mockResolvedValue([]);
     mockClient.fetchDrivers.mockResolvedValue(DRIVERS);
@@ -563,6 +590,7 @@ describe('SessionsService', () => {
 
   // ── 14. laps 비어있으면 frames 빈 배열 ──────────────────────────────────────
   it('getDriverTimings: laps가 비어있으면 frames 빈 배열을 반환한다', async () => {
+    mockClient.fetchSessions.mockResolvedValue([RACE_SESSION] as any);
     mockClient.fetchLaps.mockResolvedValue([]);
     mockClient.fetchIntervals.mockResolvedValue(INTERVALS);
     mockClient.fetchDrivers.mockResolvedValue(DRIVERS);
@@ -583,7 +611,29 @@ describe('SessionsService', () => {
     expect(mockClient.fetchLaps).toHaveBeenCalledTimes(1);
   });
 
-  // ── 16. startReplay: 응답 구조 검증 ─────────────────────────────────────────
+  // ── 16. Practice 세션 리플레이 차단 ─────────────────────────────────────────
+  it('getDriverTimings: Practice 세션은 BAD_REQUEST 에러를 throw한다', async () => {
+    const practiceSession = { ...RACE_SESSION, session_type: 'Practice 1' };
+    mockClient.fetchSessions.mockResolvedValue([practiceSession] as any);
+
+    await expect(service.getDriverTimings(SESSION_KEY)).rejects.toThrow(
+      'does not support replay',
+    );
+  });
+
+  it('getDriverTimings: Qualifying 세션은 정상 조회된다', async () => {
+    const qualiSession = { ...RACE_SESSION, session_type: 'Qualifying' };
+    mockClient.fetchSessions.mockResolvedValue([qualiSession] as any);
+    mockClient.fetchLaps.mockResolvedValue(LAPS);
+    mockClient.fetchIntervals.mockResolvedValue(INTERVALS);
+    mockClient.fetchDrivers.mockResolvedValue(DRIVERS);
+    mockClient.fetchStints.mockResolvedValue(STINTS);
+
+    const { frames } = await service.getDriverTimings(SESSION_KEY);
+    expect(frames.length).toBeGreaterThan(0);
+  });
+
+  // ── 17. startReplay: 응답 구조 검증 ─────────────────────────────────────────
   it('startReplay: driverCount·dataStats(lapsCount, intervalsCount, stintsCount)를 포함한 응답을 반환한다', async () => {
     mockClient.fetchDrivers.mockResolvedValue(DRIVERS);
     mockClient.preloadReplayData.mockResolvedValue({
@@ -675,6 +725,7 @@ describe('SessionsService', () => {
         tyre_age_at_start: 0,
       },
     ];
+    mockClient.fetchSessions.mockResolvedValue([RACE_SESSION] as any);
     mockClient.fetchLaps.mockResolvedValue(LAPS);
     mockClient.fetchIntervals.mockResolvedValue(INTERVALS);
     mockClient.fetchDrivers.mockResolvedValue(DRIVERS);

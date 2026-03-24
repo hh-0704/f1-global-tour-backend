@@ -36,27 +36,17 @@ export class SessionsController {
     @Query('country') country?: string,
     @Query('year') year?: string,
   ) {
-    try {
-      const sessions = await this.sessionsService.getSessions(country, year);
-      return ApiResponseDto.success(sessions);
-    } catch (error) {
-      throw error;
-    }
+    const sessions = await this.sessionsService.getSessions(country, year);
+    return ApiResponseDto.success(sessions);
   }
 
   @Get(':sessionKey/drivers')
   @ApiOperation({ summary: '세션 드라이버 목록 조회', description: '특정 세션에 참가한 전체 드라이버 정보 반환' })
   @ApiParam({ name: 'sessionKey', description: '세션 고유 식별자' })
   @ApiResponse({ status: 200, description: '드라이버 목록 반환 성공' })
-  async getSessionDrivers(@Param('sessionKey') sessionKey: string) {
-    try {
-      const drivers = await this.sessionsService.getSessionDrivers(
-        Number(sessionKey),
-      );
-      return ApiResponseDto.success(drivers);
-    } catch (error) {
-      throw error;
-    }
+  async getSessionDrivers(@Param('sessionKey', ParseIntPipe) sessionKey: number) {
+    const drivers = await this.sessionsService.getSessionDrivers(sessionKey);
+    return ApiResponseDto.success(drivers);
   }
 
   @Get(':sessionKey/driver-timings')
@@ -72,12 +62,8 @@ export class SessionsController {
   @ApiParam({ name: 'sessionKey', description: '세션 고유 식별자' })
   @ApiResponse({ status: 200, description: '리플레이 프레임 반환 성공' })
   async getDriverTimings(@Param('sessionKey', ParseIntPipe) sessionKey: number) {
-    try {
-      const data = await this.sessionsService.getDriverTimings(sessionKey);
-      return ApiResponseDto.success(data);
-    } catch (error) {
-      throw error;
-    }
+    const data = await this.sessionsService.getDriverTimings(sessionKey);
+    return ApiResponseDto.success(data);
   }
 
   @Get(':sessionKey/race-flags')
@@ -92,12 +78,8 @@ export class SessionsController {
   @ApiParam({ name: 'sessionKey', description: '세션 고유 식별자' })
   @ApiResponse({ status: 200, description: '플래그 정보 반환 성공' })
   async getRaceFlags(@Param('sessionKey', ParseIntPipe) sessionKey: number) {
-    try {
-      const data = await this.raceFlagsService.getRaceFlags(sessionKey);
-      return ApiResponseDto.success(data);
-    } catch (error) {
-      throw error;
-    }
+    const data = await this.raceFlagsService.getRaceFlags(sessionKey);
+    return ApiResponseDto.success(data);
   }
 
   @Post(':sessionKey/start-replay')
@@ -107,12 +89,8 @@ export class SessionsController {
   })
   @ApiParam({ name: 'sessionKey', description: '세션 고유 식별자' })
   @ApiResponse({ status: 200, description: '프리로드 완료' })
-  async startReplay(@Param('sessionKey') sessionKey: string) {
-    try {
-      const result = await this.sessionsService.startReplay(Number(sessionKey));
-      return ApiResponseDto.success(result);
-    } catch (error) {
-      throw error;
-    }
+  async startReplay(@Param('sessionKey', ParseIntPipe) sessionKey: number) {
+    const result = await this.sessionsService.startReplay(sessionKey);
+    return ApiResponseDto.success(result);
   }
 }

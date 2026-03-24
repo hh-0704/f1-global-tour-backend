@@ -1,7 +1,9 @@
 import { CircuitBreakerStats } from '../../../common/services/circuit-breaker.service';
 
+export type HealthStatusValue = 'healthy' | 'recovering' | 'unhealthy' | 'unknown';
+
 export interface HealthStatus {
-  status: string;
+  status: 'ok';
   timestamp: string;
   services: {
     openf1Api: {
@@ -12,7 +14,7 @@ export interface HealthStatus {
 }
 
 export interface CircuitBreakerStatsWithHealth extends CircuitBreakerStats {
-  healthStatus: string;
+  healthStatus: HealthStatusValue;
   timestamp: string;
 }
 

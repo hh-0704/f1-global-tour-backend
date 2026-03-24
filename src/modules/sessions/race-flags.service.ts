@@ -2,19 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { BaseF1Service } from '../../common/services/base-f1.service';
 import { CachedOpenF1ClientService } from '../../common/services/cached-openf1-client.service';
 import { OpenF1RaceControl } from '../../common/interfaces/openf1.interface';
-import { RaceControlQueryParams } from '../../common/interfaces/query-params.interface';
-
-type FlagStatus = 'GREEN' | 'RED' | 'SC' | 'VSC' | 'YELLOW';
-type LapFlagStatus = 'NONE' | 'RED' | 'SC' | 'VSC' | 'YELLOW';
-type FrontendSessionType = 'RACE' | 'QUALIFYING' | 'PRACTICE';
-
-export interface RaceFlagsResponse {
-  sessionType: FrontendSessionType;
-  totalLaps: number;
-  lapFlags: LapFlagStatus[];
-  totalMinutes: number;
-  minuteFlags: LapFlagStatus[];
-}
+import type {
+  FlagStatus,
+  LapFlagStatus,
+  FrontendSessionType,
+  RaceFlagsResponse,
+} from './interfaces/race-flags.interface';
 
 @Injectable()
 export class RaceFlagsService extends BaseF1Service {
@@ -37,35 +30,26 @@ export class RaceFlagsService extends BaseF1Service {
         }
 
         // 순차 호출
-        const sessions = await this.cachedOpenf1Client.fetchSessions({ session_key: sessionKey } as any);
-        const raceControl = await this.cachedOpenf1Client.fetchRaceControl({ session_key: sessionKey } as RaceControlQueryParams);
+        const sessions = await this.cachedOpenf1Client.fetchSessions({ session_key: sessionKey });
+        const raceControl = await this.cachedOpenf1Client.fetchRaceControl({ session_key: sessionKey });
         const laps = await this.cachedOpenf1Client.fetchLaps({ session_key: sessionKey });
 
         const session = sessions[0];
         const sessionType = this.mapSessionType(session?.session_type ?? 'Race');
 
-        let totalLaps = 0;
-        let lapFlags: LapFlagStatus[] = [];
+        const totalLaps = laps.length > 0
+          ? Math.max(...laps.map((l) => l.lap_number).filter((n) => Number.isFinite(n)))
+          : 0;
+        const lapFlags = this.buildLapFlags(raceControl, totalLaps);
+
         let totalMinutes = 0;
         let minuteFlags: LapFlagStatus[] = [];
 
-        if (sessionType === 'RACE') {
-          totalLaps = laps.length > 0
-            ? Math.max(...laps.map((l) => l.lap_number).filter((n) => Number.isFinite(n)))
-            : 0;
-          lapFlags = this.buildLapFlags(raceControl, totalLaps);
-        } else {
-          // 퀄리파잉/연습: 시간 기반
-          if (session) {
-            const startMs = new Date(session.date_start).getTime();
-            const endMs = new Date(session.date_end).getTime();
-            totalMinutes = Math.ceil((endMs - startMs) / 60000);
-            minuteFlags = this.buildMinuteFlags(raceControl, startMs, totalMinutes);
-          }
-          totalLaps = laps.length > 0
-            ? Math.max(...laps.map((l) => l.lap_number).filter((n) => Number.isFinite(n)))
-            : 0;
-          lapFlags = this.buildLapFlags(raceControl, totalLaps);
+        if (sessionType !== 'RACE' && session) {
+          const startMs = new Date(session.date_start).getTime();
+          const endMs = new Date(session.date_end).getTime();
+          totalMinutes = Math.ceil((endMs - startMs) / 60000);
+          minuteFlags = this.buildMinuteFlags(raceControl, startMs, totalMinutes);
         }
 
         const data: RaceFlagsResponse = { sessionType, totalLaps, lapFlags, totalMinutes, minuteFlags };
@@ -100,30 +84,28 @@ export class RaceFlagsService extends BaseF1Service {
     return null;
   }
 
-  private buildLapFlags(raceControl: OpenF1RaceControl[], maxLap: number): LapFlagStatus[] {
-    if (maxLap <= 0) return [];
-
-    const lapFlags: LapFlagStatus[] = new Array(maxLap).fill('NONE');
-
-    const flagMessages = raceControl
+  private getTrackFlagMessages(raceControl: OpenF1RaceControl[]): OpenF1RaceControl[] {
+    return raceControl
       .filter((msg) => {
         if (msg.scope && msg.scope !== 'Track') return false;
         return this.classifyFlag(msg) !== null;
       })
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }
 
-    let currentFlag: LapFlagStatus = 'NONE';
+  private applyFlagClassification(classified: FlagStatus): LapFlagStatus {
+    return classified === 'GREEN' ? 'NONE' : classified;
+  }
+
+  private buildLapFlags(raceControl: OpenF1RaceControl[], maxLap: number): LapFlagStatus[] {
+    if (maxLap <= 0) return [];
+
+    const lapFlags: LapFlagStatus[] = new Array(maxLap).fill('NONE');
     let lastLap = 0;
 
-    for (const msg of flagMessages) {
-      const classified = this.classifyFlag(msg)!;
+    for (const msg of this.getTrackFlagMessages(raceControl)) {
+      const currentFlag = this.applyFlagClassification(this.classifyFlag(msg)!);
       const lapNum = msg.lap_number ?? lastLap;
-
-      if (classified === 'GREEN') {
-        currentFlag = 'NONE';
-      } else {
-        currentFlag = classified as LapFlagStatus;
-      }
 
       if (lapNum >= 1 && lapNum <= maxLap) {
         for (let i = lapNum - 1; i < maxLap; i++) {
@@ -145,25 +127,9 @@ export class RaceFlagsService extends BaseF1Service {
 
     const minuteFlags: LapFlagStatus[] = new Array(totalMinutes).fill('NONE');
 
-    const flagMessages = raceControl
-      .filter((msg) => {
-        if (msg.scope && msg.scope !== 'Track') return false;
-        return this.classifyFlag(msg) !== null;
-      })
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-    let currentFlag: LapFlagStatus = 'NONE';
-
-    for (const msg of flagMessages) {
-      const classified = this.classifyFlag(msg)!;
-      const msgMs = new Date(msg.date).getTime();
-      const minuteIndex = Math.floor((msgMs - sessionStartMs) / 60000);
-
-      if (classified === 'GREEN') {
-        currentFlag = 'NONE';
-      } else {
-        currentFlag = classified as LapFlagStatus;
-      }
+    for (const msg of this.getTrackFlagMessages(raceControl)) {
+      const currentFlag = this.applyFlagClassification(this.classifyFlag(msg)!);
+      const minuteIndex = Math.floor((new Date(msg.date).getTime() - sessionStartMs) / 60000);
 
       if (minuteIndex >= 0 && minuteIndex < totalMinutes) {
         for (let i = minuteIndex; i < totalMinutes; i++) {

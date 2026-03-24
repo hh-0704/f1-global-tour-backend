@@ -1,18 +1,27 @@
 import { Injectable } from '@nestjs/common';
-import { OpenF1ClientService } from '../../common/services/openf1-client.service';
-import { CircuitBreakerStats } from '../../common/services/circuit-breaker.service';
 import {
+  CircuitBreakerService,
+  CircuitBreakerState,
+} from '../../common/services/circuit-breaker.service';
+import type {
   HealthStatus,
+  HealthStatusValue,
   CircuitBreakerStatsWithHealth,
   ResetResponse,
 } from './interfaces/health.interface';
 
+const HEALTH_STATUS_MAP: Record<CircuitBreakerState, HealthStatusValue> = {
+  [CircuitBreakerState.CLOSED]: 'healthy',
+  [CircuitBreakerState.HALF_OPEN]: 'recovering',
+  [CircuitBreakerState.OPEN]: 'unhealthy',
+};
+
 @Injectable()
 export class HealthService {
-  constructor(private readonly openf1Client: OpenF1ClientService) {}
+  constructor(private readonly circuitBreaker: CircuitBreakerService) {}
 
   getHealthStatus(): HealthStatus {
-    const circuitBreakerStats = this.openf1Client.getCircuitBreakerStats();
+    const circuitBreakerStats = this.circuitBreaker.getStats();
 
     return {
       status: 'ok',
@@ -20,42 +29,29 @@ export class HealthService {
       services: {
         openf1Api: {
           circuitBreaker: circuitBreakerStats,
-          healthy: circuitBreakerStats.state !== 'OPEN',
+          healthy: circuitBreakerStats.state !== CircuitBreakerState.OPEN,
         },
       },
     };
   }
 
   getCircuitBreakerStats(): CircuitBreakerStatsWithHealth {
-    const stats = this.openf1Client.getCircuitBreakerStats();
+    const stats = this.circuitBreaker.getStats();
 
     return {
       ...stats,
-      healthStatus: this.getHealthStatusFromStats(stats),
+      healthStatus: HEALTH_STATUS_MAP[stats.state] ?? 'unknown',
       timestamp: new Date().toISOString(),
     };
   }
 
   resetCircuitBreaker(): ResetResponse {
-    this.openf1Client.resetCircuitBreaker();
+    this.circuitBreaker.reset();
 
     return {
       message: 'Circuit Breaker has been reset',
       timestamp: new Date().toISOString(),
-      newStats: this.openf1Client.getCircuitBreakerStats(),
+      newStats: this.circuitBreaker.getStats(),
     };
-  }
-
-  private getHealthStatusFromStats(stats: CircuitBreakerStats): string {
-    switch (stats.state) {
-      case 'CLOSED':
-        return 'healthy';
-      case 'HALF_OPEN':
-        return 'recovering';
-      case 'OPEN':
-        return 'unhealthy';
-      default:
-        return 'unknown';
-    }
   }
 }

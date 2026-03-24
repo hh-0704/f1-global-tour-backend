@@ -1,40 +1,29 @@
-import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { CachedOpenF1ClientService } from '../../common/services/cached-openf1-client.service';
+import { BaseF1Service } from '../../common/services/base-f1.service';
+import { OpenF1Lap } from '../../common/interfaces/openf1.interface';
 import { LapsQueryParams } from '../../common/interfaces/query-params.interface';
+import { TransformedLap } from './interfaces/lap.interface';
 
 @Injectable()
-export class LapsService {
-  private readonly logger = new Logger(LapsService.name);
+export class LapsService extends BaseF1Service {
+  constructor(cachedOpenf1Client: CachedOpenF1ClientService) {
+    super(cachedOpenf1Client);
+  }
 
-  constructor(private readonly cachedOpenf1Client: CachedOpenF1ClientService) {}
-
-  async getSessionLaps(sessionKey: number, lapNumber?: number) {
-    try {
+  async getSessionLaps(sessionKey: number, lapNumber?: number): Promise<TransformedLap[]> {
+    return this.executeWithErrorHandling(async () => {
       const params: LapsQueryParams = {
         session_key: sessionKey,
-        ...(lapNumber && { lap_number: lapNumber }),
+        ...(lapNumber != null && { lap_number: lapNumber }),
       };
 
       const laps = await this.cachedOpenf1Client.fetchLaps(params);
-      const transformedLaps = laps.map((lap) => this.transformLapData(lap));
-
-      this.logger.log(`Retrieved ${transformedLaps.length} laps for session ${sessionKey}`);
-      return transformedLaps;
-    } catch (error) {
-      this.logger.error(`Error fetching session laps:`, error);
-
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
-      throw new HttpException(
-        'Failed to fetch session laps',
-        HttpStatus.SERVICE_UNAVAILABLE,
-      );
-    }
+      return laps.map((lap) => this.transformLapData(lap));
+    }, 'fetch session laps', { sessionKey, lapNumber });
   }
 
-  private transformLapData(lap: any) {
+  private transformLapData(lap: OpenF1Lap): TransformedLap {
     return {
       lapNumber: lap.lap_number,
       lapTime: lap.lap_duration,
