@@ -30,16 +30,29 @@ export class RaceFlagsService extends BaseF1Service {
         }
 
         // 순차 호출
-        const sessions = await this.cachedOpenf1Client.fetchSessions({ session_key: sessionKey });
-        const raceControl = await this.cachedOpenf1Client.fetchRaceControl({ session_key: sessionKey });
-        const laps = await this.cachedOpenf1Client.fetchLaps({ session_key: sessionKey });
+        const sessions = await this.cachedOpenf1Client.fetchSessions({
+          session_key: sessionKey,
+        });
+        const raceControl = await this.cachedOpenf1Client.fetchRaceControl({
+          session_key: sessionKey,
+        });
+        const laps = await this.cachedOpenf1Client.fetchLaps({
+          session_key: sessionKey,
+        });
 
         const session = sessions[0];
-        const sessionType = this.mapSessionType(session?.session_type ?? 'Race');
+        const sessionType = this.mapSessionType(
+          session?.session_type ?? 'Race',
+        );
 
-        const totalLaps = laps.length > 0
-          ? Math.max(...laps.map((l) => l.lap_number).filter((n) => Number.isFinite(n)))
-          : 0;
+        const totalLaps =
+          laps.length > 0
+            ? Math.max(
+                ...laps
+                  .map((l) => l.lap_number)
+                  .filter((n) => Number.isFinite(n)),
+              )
+            : 0;
         const lapFlags = this.buildLapFlags(raceControl, totalLaps);
 
         let totalMinutes = 0;
@@ -49,10 +62,20 @@ export class RaceFlagsService extends BaseF1Service {
           const startMs = new Date(session.date_start).getTime();
           const endMs = new Date(session.date_end).getTime();
           totalMinutes = Math.ceil((endMs - startMs) / 60000);
-          minuteFlags = this.buildMinuteFlags(raceControl, startMs, totalMinutes);
+          minuteFlags = this.buildMinuteFlags(
+            raceControl,
+            startMs,
+            totalMinutes,
+          );
         }
 
-        const data: RaceFlagsResponse = { sessionType, totalLaps, lapFlags, totalMinutes, minuteFlags };
+        const data: RaceFlagsResponse = {
+          sessionType,
+          totalLaps,
+          lapFlags,
+          totalMinutes,
+          minuteFlags,
+        };
         this.flagsCache.set(sessionKey, { data, cachedAt: Date.now() });
         return data;
       },
@@ -64,7 +87,8 @@ export class RaceFlagsService extends BaseF1Service {
   private mapSessionType(openF1Type: string): FrontendSessionType {
     const lower = openF1Type.toLowerCase();
     if (lower.includes('race') || lower.includes('sprint')) return 'RACE';
-    if (lower.includes('qualifying') || lower.includes('shootout')) return 'QUALIFYING';
+    if (lower.includes('qualifying') || lower.includes('shootout'))
+      return 'QUALIFYING';
     return 'PRACTICE';
   }
 
@@ -76,15 +100,25 @@ export class RaceFlagsService extends BaseF1Service {
     const flag = msg.flag?.toUpperCase() ?? '';
 
     if (flag === 'RED' || message.includes('RED FLAG')) return 'RED';
-    if (message.includes('VIRTUAL SAFETY CAR') || message.includes('VSC')) return 'VSC';
-    if (message.includes('SAFETY CAR') || message.includes('SC DEPLOYED')) return 'SC';
+    if (message.includes('VIRTUAL SAFETY CAR') || message.includes('VSC'))
+      return 'VSC';
+    if (message.includes('SAFETY CAR') || message.includes('SC DEPLOYED'))
+      return 'SC';
     if (flag === 'YELLOW' || message.includes('YELLOW FLAG')) return 'YELLOW';
-    if (flag === 'GREEN' || flag === 'CLEAR' || message.includes('GREEN FLAG') || message.includes('TRACK CLEAR')) return 'GREEN';
+    if (
+      flag === 'GREEN' ||
+      flag === 'CLEAR' ||
+      message.includes('GREEN FLAG') ||
+      message.includes('TRACK CLEAR')
+    )
+      return 'GREEN';
 
     return null;
   }
 
-  private getTrackFlagMessages(raceControl: OpenF1RaceControl[]): OpenF1RaceControl[] {
+  private getTrackFlagMessages(
+    raceControl: OpenF1RaceControl[],
+  ): OpenF1RaceControl[] {
     return raceControl
       .filter((msg) => {
         if (msg.scope && msg.scope !== 'Track') return false;
@@ -97,10 +131,15 @@ export class RaceFlagsService extends BaseF1Service {
     return classified === 'GREEN' ? 'NONE' : classified;
   }
 
-  private buildLapFlags(raceControl: OpenF1RaceControl[], maxLap: number): LapFlagStatus[] {
+  private buildLapFlags(
+    raceControl: OpenF1RaceControl[],
+    maxLap: number,
+  ): LapFlagStatus[] {
     if (maxLap <= 0) return [];
 
-    const lapFlags: LapFlagStatus[] = new Array(maxLap).fill('NONE');
+    const lapFlags: LapFlagStatus[] = new Array<LapFlagStatus>(maxLap).fill(
+      'NONE',
+    );
     let lastLap = 0;
 
     for (const msg of this.getTrackFlagMessages(raceControl)) {
@@ -125,11 +164,15 @@ export class RaceFlagsService extends BaseF1Service {
   ): LapFlagStatus[] {
     if (totalMinutes <= 0) return [];
 
-    const minuteFlags: LapFlagStatus[] = new Array(totalMinutes).fill('NONE');
+    const minuteFlags: LapFlagStatus[] = new Array<LapFlagStatus>(
+      totalMinutes,
+    ).fill('NONE');
 
     for (const msg of this.getTrackFlagMessages(raceControl)) {
       const currentFlag = this.applyFlagClassification(this.classifyFlag(msg)!);
-      const minuteIndex = Math.floor((new Date(msg.date).getTime() - sessionStartMs) / 60000);
+      const minuteIndex = Math.floor(
+        (new Date(msg.date).getTime() - sessionStartMs) / 60000,
+      );
 
       if (minuteIndex >= 0 && minuteIndex < totalMinutes) {
         for (let i = minuteIndex; i < totalMinutes; i++) {

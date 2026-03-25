@@ -25,6 +25,8 @@ export interface OpenF1Driver {
   name_acronym: string;
   team_name: string;
   team_colour: string;
+  country_code?: string;
+  headshot_url?: string;
 }
 
 export interface OpenF1Lap {
@@ -40,9 +42,13 @@ export interface OpenF1Lap {
   is_pit_out_lap: boolean;
   i1_speed?: number | null;
   i2_speed?: number | null;
-  segments_sector_1?: number[];
-  segments_sector_2?: number[];
-  segments_sector_3?: number[];
+  speed_i1?: number | null;
+  speed_i2?: number | null;
+  speed_fl?: number | null;
+  speed_st?: number | null;
+  segments_sector_1?: number[] | null;
+  segments_sector_2?: number[] | null;
+  segments_sector_3?: number[] | null;
 }
 
 export interface OpenF1CarData {
@@ -55,6 +61,7 @@ export interface OpenF1CarData {
   drs: number;
   n_gear: number;
   speed: number;
+  rpm?: number;
 }
 
 export interface OpenF1Interval {

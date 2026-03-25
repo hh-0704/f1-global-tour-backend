@@ -23,11 +23,17 @@ export class HttpExceptionFilter implements ExceptionFilter {
       const exceptionResponse = exception.getResponse();
 
       if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
-        const responseObj = exceptionResponse as any;
-        message = responseObj.message || message;
-        code = responseObj.error || this.getErrorCode(status);
-      } else {
-        message = exceptionResponse as string;
+        const responseObj = exceptionResponse as Record<string, unknown>;
+        message =
+          (typeof responseObj.message === 'string'
+            ? responseObj.message
+            : undefined) ?? message;
+        code =
+          (typeof responseObj.error === 'string'
+            ? responseObj.error
+            : undefined) ?? this.getErrorCode(status);
+      } else if (typeof exceptionResponse === 'string') {
+        message = exceptionResponse;
         code = this.getErrorCode(status);
       }
     }
@@ -39,7 +45,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     response.status(status).json(errorResponse);
   }
 
-  private getErrorCode(status: number): string {
+  private getErrorCode(status: HttpStatus): string {
     switch (status) {
       case HttpStatus.BAD_REQUEST:
         return 'BAD_REQUEST';

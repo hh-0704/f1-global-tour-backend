@@ -29,14 +29,20 @@ async function bootstrap() {
   // Swagger
   const config = new DocumentBuilder()
     .setTitle('F1 Global Tour API')
-    .setDescription('OpenF1 API 프록시 서버. 세션 선택 → driver-timings 한 번 호출로 전체 리플레이 프레임 수신.')
+    .setDescription(
+      'OpenF1 API 프록시 서버. 세션 선택 → driver-timings 한 번 호출로 전체 리플레이 프레임 수신.',
+    )
     .setVersion('1.0')
     .addTag('sessions', '세션 목록, 드라이버 조회, 리플레이 프레임 계산')
     .addTag('laps', '랩 데이터 조회')
     .addTag('telemetry', '드라이버 텔레메트리 조회')
     .addTag('health', 'Circuit Breaker 상태 및 헬스체크')
     .build();
-  SwaggerModule.setup('api/docs', app, SwaggerModule.createDocument(app, config));
+  SwaggerModule.setup(
+    'api/docs',
+    app,
+    SwaggerModule.createDocument(app, config),
+  );
 
   const port = configService.get<number>('port', 4000);
   await app.listen(port);
@@ -45,4 +51,4 @@ async function bootstrap() {
   logger.log(`API Documentation: http://localhost:${port}/api/docs`);
 }
 
-bootstrap();
+void bootstrap();

@@ -4,13 +4,13 @@ export class ApiResponseDto<T> {
   error?: {
     code: string;
     message: string;
-    details?: any;
+    details?: unknown;
   };
   timestamp: string;
 
   constructor(
     data?: T,
-    error?: { code: string; message: string; details?: any },
+    error?: { code: string; message: string; details?: unknown },
   ) {
     this.success = !error;
     this.data = data;
@@ -25,7 +25,7 @@ export class ApiResponseDto<T> {
   static error<T>(
     code: string,
     message: string,
-    details?: any,
+    details?: unknown,
   ): ApiResponseDto<T> {
     return new ApiResponseDto<T>(undefined, { code, message, details });
   }

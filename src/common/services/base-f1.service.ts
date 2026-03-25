@@ -22,7 +22,7 @@ export abstract class BaseF1Service {
   protected async executeWithErrorHandling<T>(
     operation: () => Promise<T>,
     operationName: string,
-    context?: Record<string, any>,
+    context?: Record<string, unknown>,
   ): Promise<T> {
     try {
       if (context) {
@@ -87,7 +87,9 @@ export abstract class BaseF1Service {
       return data;
     }
 
-    return data.filter((item: any) => item[driverField] === driverNumber);
+    return data.filter(
+      (item) => (item as Record<string, unknown>)[driverField] === driverNumber,
+    );
   }
 
   /**
@@ -158,9 +160,11 @@ export abstract class BaseF1Service {
     data: T[],
     timestampField: string = 'timestamp',
   ): T[] {
-    return [...data].sort((a: any, b: any) => {
-      const timeA = new Date(a[timestampField]).getTime();
-      const timeB = new Date(b[timestampField]).getTime();
+    return [...data].sort((a, b) => {
+      const aRecord = a as Record<string, unknown>;
+      const bRecord = b as Record<string, unknown>;
+      const timeA = new Date(aRecord[timestampField] as string).getTime();
+      const timeB = new Date(bRecord[timestampField] as string).getTime();
       return timeA - timeB;
     });
   }
@@ -202,12 +206,12 @@ export abstract class BaseF1Service {
   protected createResponse<T>(
     sessionKey: number,
     data: T,
-    metadata?: Record<string, any>,
+    metadata?: Record<string, unknown>,
   ): {
     sessionKey: number;
     data: T;
     timestamp: string;
-  } & Record<string, any> {
+  } & Record<string, unknown> {
     return {
       sessionKey,
       data,

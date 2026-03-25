@@ -25,7 +25,10 @@ export class TelemetryController {
     @Param('sessionKey', ParseIntPipe) sessionKey: number,
     @Param('driverNumber', ParseIntPipe) driverNumber: number,
   ) {
-    const data = await this.telemetryService.getDriverTelemetry(sessionKey, driverNumber);
+    const data = await this.telemetryService.getDriverTelemetry(
+      sessionKey,
+      driverNumber,
+    );
     return ApiResponseDto.success(data);
   }
 }

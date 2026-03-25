@@ -1,3 +1,9 @@
+import {
+  OpenF1Lap,
+  OpenF1Driver,
+  OpenF1CarData,
+} from '../interfaces/openf1.interface';
+
 /**
  * Utility class for F1 data transformations
  * Contains all shared transformation logic used across multiple services
@@ -50,7 +56,11 @@ export class F1TransformationsUtil {
       return { enabled: false, available: false };
     }
 
-    return this.DRS_MAPPING[drsValue] || { enabled: false, available: false };
+    const mapping =
+      this.DRS_MAPPING[
+        drsValue as keyof typeof F1TransformationsUtil.DRS_MAPPING
+      ];
+    return mapping ?? { enabled: false, available: false };
   }
 
   /**
@@ -65,7 +75,9 @@ export class F1TransformationsUtil {
 
     return segments.map((segment) => ({
       value: segment,
-      ...(this.SEGMENT_MAPPING[segment] || {
+      ...(this.SEGMENT_MAPPING[
+        segment as keyof typeof F1TransformationsUtil.SEGMENT_MAPPING
+      ] ?? {
         color: 'unknown',
         meaning: 'unknown segment',
         performance: 'neutral',
@@ -81,7 +93,7 @@ export class F1TransformationsUtil {
   static detectPitLane(...segmentArrays: (number[] | null)[]): boolean {
     const allSegments = segmentArrays
       .filter((segments) => segments !== null && Array.isArray(segments))
-      .flat() as number[];
+      .flat();
 
     return allSegments.includes(this.PIT_SEGMENT_VALUE);
   }
@@ -139,27 +151,22 @@ export class F1TransformationsUtil {
    * @param lapData - Raw lap data from OpenF1 API
    * @returns Transformed lap data with segment analysis
    */
-  static transformLapData(lapData: any): TransformedLapData {
-    const sector1Segments = this.transformSegments(lapData.segments_sector_1);
-    const sector2Segments = this.transformSegments(lapData.segments_sector_2);
-    const sector3Segments = this.transformSegments(lapData.segments_sector_3);
+  static transformLapData(lapData: OpenF1Lap): TransformedLapData {
+    const seg1 = lapData.segments_sector_1 ?? null;
+    const seg2 = lapData.segments_sector_2 ?? null;
+    const seg3 = lapData.segments_sector_3 ?? null;
 
-    const isPitLane = this.detectPitLane(
-      lapData.segments_sector_1,
-      lapData.segments_sector_2,
-      lapData.segments_sector_3,
-    );
+    const sector1Segments = this.transformSegments(seg1);
+    const sector2Segments = this.transformSegments(seg2);
+    const sector3Segments = this.transformSegments(seg3);
 
-    const isPitOutLap = this.detectPitOutLap(
-      lapData.segments_sector_1,
-      lapData.segments_sector_2,
-      lapData.segments_sector_3,
-    );
+    const isPitLane = this.detectPitLane(seg1, seg2, seg3);
+    const isPitOutLap = this.detectPitOutLap(seg1, seg2, seg3);
 
     return {
       lapNumber: lapData.lap_number,
       lapTime: lapData.lap_duration
-        ? this.convertTimeToSeconds(lapData.lap_duration)
+        ? this.convertTimeToSeconds(String(lapData.lap_duration))
         : null,
       sectors: {
         sector1: lapData.duration_sector_1,
@@ -167,10 +174,10 @@ export class F1TransformationsUtil {
         sector3: lapData.duration_sector_3,
       },
       speeds: {
-        i1Speed: lapData.speed_i1,
-        i2Speed: lapData.speed_i2,
-        flSpeed: lapData.speed_fl,
-        stSpeed: lapData.speed_st,
+        i1Speed: lapData.speed_i1 ?? lapData.i1_speed ?? null,
+        i2Speed: lapData.speed_i2 ?? lapData.i2_speed ?? null,
+        flSpeed: lapData.speed_fl ?? null,
+        stSpeed: lapData.speed_st ?? null,
       },
       isPitOutLap,
       isDNF: !lapData.lap_duration,
@@ -181,9 +188,9 @@ export class F1TransformationsUtil {
         sector3: sector3Segments,
       },
       sectorPerformance: {
-        sector1: this.analyzeSectorPerformance(lapData.segments_sector_1),
-        sector2: this.analyzeSectorPerformance(lapData.segments_sector_2),
-        sector3: this.analyzeSectorPerformance(lapData.segments_sector_3),
+        sector1: this.analyzeSectorPerformance(seg1),
+        sector2: this.analyzeSectorPerformance(seg2),
+        sector3: this.analyzeSectorPerformance(seg3),
       },
       timestamp: lapData.date_start,
       driverNumber: lapData.driver_number,
@@ -197,15 +204,15 @@ export class F1TransformationsUtil {
    * @param driverData - Raw driver data from OpenF1 API
    * @returns Transformed driver data
    */
-  static transformDriverData(driverData: any): TransformedDriver {
+  static transformDriverData(driverData: OpenF1Driver): TransformedDriver {
     return {
       number: driverData.driver_number,
       name: driverData.name_acronym,
       fullName: driverData.full_name,
       team: driverData.team_name,
       teamColor: driverData.team_colour,
-      countryCode: driverData.country_code,
-      headShotUrl: driverData.headshot_url,
+      countryCode: driverData.country_code ?? '',
+      headShotUrl: driverData.headshot_url ?? '',
       sessionKey: driverData.session_key,
       meetingKey: driverData.meeting_key,
     };
@@ -216,15 +223,15 @@ export class F1TransformationsUtil {
    * @param carData - Raw car data from OpenF1 API
    * @returns Transformed car data
    */
-  static transformCarData(carData: any): TransformedCarData {
+  static transformCarData(carData: OpenF1CarData): TransformedCarData {
     return {
       timestamp: carData.date,
       driverNumber: carData.driver_number,
       speed: carData.speed,
-      rpm: carData.rpm,
+      rpm: carData.rpm ?? null,
       gear: carData.n_gear,
       throttle: carData.throttle,
-      brake: carData.brake,
+      brake: carData.brake > 0,
       drs: {
         value: carData.drs,
         ...this.transformDRS(carData.drs),

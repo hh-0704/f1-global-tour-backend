@@ -108,7 +108,7 @@ export class CircuitBreakerService {
   /**
    * 작업 실패 시 호출
    */
-  private onFailure(error: Error | unknown): void {
+  private onFailure(error: unknown): void {
     this.failedRequests++;
     this.failureCount++;
     this.lastFailureTime = Date.now();

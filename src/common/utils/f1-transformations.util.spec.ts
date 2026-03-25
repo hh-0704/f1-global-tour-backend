@@ -1,4 +1,9 @@
 import { F1TransformationsUtil } from './f1-transformations.util';
+import {
+  OpenF1Lap,
+  OpenF1Driver,
+  OpenF1CarData,
+} from '../interfaces/openf1.interface';
 
 describe('F1TransformationsUtil', () => {
   // ── transformDRS ──────────────────────────────────────────────────────────────
@@ -48,7 +53,9 @@ describe('F1TransformationsUtil', () => {
     });
 
     it('세그먼트 값을 color/meaning/performance로 변환한다', () => {
-      const result = F1TransformationsUtil.transformSegments([2048, 2049, 2051]);
+      const result = F1TransformationsUtil.transformSegments([
+        2048, 2049, 2051,
+      ]);
 
       expect(result).toHaveLength(3);
       expect(result[0]).toMatchObject({ value: 2048, color: 'yellow' });
@@ -91,19 +98,27 @@ describe('F1TransformationsUtil', () => {
 
   describe('detectPitOutLap', () => {
     it('sector1에 피트 세그먼트가 있으면 true', () => {
-      expect(F1TransformationsUtil.detectPitOutLap([2064], [2048], [2049])).toBe(true);
+      expect(
+        F1TransformationsUtil.detectPitOutLap([2064], [2048], [2049]),
+      ).toBe(true);
     });
 
     it('sector2에 피트가 있고 sector3에 없으면 true', () => {
-      expect(F1TransformationsUtil.detectPitOutLap([2048], [2064], [2049])).toBe(true);
+      expect(
+        F1TransformationsUtil.detectPitOutLap([2048], [2064], [2049]),
+      ).toBe(true);
     });
 
     it('sector2와 sector3 모두 피트이면 false (피트 아웃이 아닌 피트 인)', () => {
-      expect(F1TransformationsUtil.detectPitOutLap([2048], [2064], [2064])).toBe(false);
+      expect(
+        F1TransformationsUtil.detectPitOutLap([2048], [2064], [2064]),
+      ).toBe(false);
     });
 
     it('피트 세그먼트가 전혀 없으면 false', () => {
-      expect(F1TransformationsUtil.detectPitOutLap([2048], [2049], [2051])).toBe(false);
+      expect(
+        F1TransformationsUtil.detectPitOutLap([2048], [2049], [2051]),
+      ).toBe(false);
     });
   });
 
@@ -111,27 +126,39 @@ describe('F1TransformationsUtil', () => {
 
   describe('analyzeSectorPerformance', () => {
     it('null이면 neutral을 반환한다', () => {
-      expect(F1TransformationsUtil.analyzeSectorPerformance(null)).toBe('neutral');
+      expect(F1TransformationsUtil.analyzeSectorPerformance(null)).toBe(
+        'neutral',
+      );
     });
 
     it('2051(purple)이 있으면 personal_best', () => {
-      expect(F1TransformationsUtil.analyzeSectorPerformance([2048, 2051])).toBe('personal_best');
+      expect(F1TransformationsUtil.analyzeSectorPerformance([2048, 2051])).toBe(
+        'personal_best',
+      );
     });
 
     it('2049(green)이 있으면 best', () => {
-      expect(F1TransformationsUtil.analyzeSectorPerformance([2048, 2049])).toBe('best');
+      expect(F1TransformationsUtil.analyzeSectorPerformance([2048, 2049])).toBe(
+        'best',
+      );
     });
 
     it('2064(pit)만 있으면 pit', () => {
-      expect(F1TransformationsUtil.analyzeSectorPerformance([2064])).toBe('pit');
+      expect(F1TransformationsUtil.analyzeSectorPerformance([2064])).toBe(
+        'pit',
+      );
     });
 
     it('2048(yellow)만 있으면 neutral', () => {
-      expect(F1TransformationsUtil.analyzeSectorPerformance([2048])).toBe('neutral');
+      expect(F1TransformationsUtil.analyzeSectorPerformance([2048])).toBe(
+        'neutral',
+      );
     });
 
     it('personal_best가 best보다 우선순위가 높다', () => {
-      expect(F1TransformationsUtil.analyzeSectorPerformance([2049, 2051])).toBe('personal_best');
+      expect(F1TransformationsUtil.analyzeSectorPerformance([2049, 2051])).toBe(
+        'personal_best',
+      );
     });
   });
 
@@ -139,7 +166,7 @@ describe('F1TransformationsUtil', () => {
 
   describe('transformDriverData', () => {
     it('OpenF1 드라이버 데이터를 camelCase로 변환한다', () => {
-      const raw = {
+      const raw: OpenF1Driver = {
         driver_number: 1,
         name_acronym: 'VER',
         full_name: 'Max VERSTAPPEN',
@@ -171,7 +198,7 @@ describe('F1TransformationsUtil', () => {
 
   describe('transformCarData', () => {
     it('car_data를 변환하고 DRS 상태를 포함한다', () => {
-      const raw = {
+      const raw: OpenF1CarData = {
         date: '2024-04-07T04:07:00.000Z',
         driver_number: 1,
         speed: 320,
@@ -200,7 +227,7 @@ describe('F1TransformationsUtil', () => {
 
   describe('transformLapData', () => {
     it('랩 데이터를 변환하고 세그먼트 분석을 포함한다', () => {
-      const raw = {
+      const raw: OpenF1Lap = {
         lap_number: 3,
         lap_duration: null,
         duration_sector_1: 28.1,

@@ -23,7 +23,9 @@ import {
 export class CachedOpenF1ClientService {
   constructor(private readonly openf1Client: OpenF1ClientService) {}
 
-  async fetchSessions(params: SessionsQueryParams = {}): Promise<OpenF1Session[]> {
+  async fetchSessions(
+    params: SessionsQueryParams = {},
+  ): Promise<OpenF1Session[]> {
     return this.openf1Client.fetchSessions(params);
   }
 
@@ -39,11 +41,15 @@ export class CachedOpenF1ClientService {
     return this.openf1Client.fetchCarData(params);
   }
 
-  async fetchIntervals(params: IntervalsQueryParams): Promise<OpenF1Interval[]> {
+  async fetchIntervals(
+    params: IntervalsQueryParams,
+  ): Promise<OpenF1Interval[]> {
     return this.openf1Client.fetchIntervals(params);
   }
 
-  async fetchRaceControl(params: RaceControlQueryParams): Promise<OpenF1RaceControl[]> {
+  async fetchRaceControl(
+    params: RaceControlQueryParams,
+  ): Promise<OpenF1RaceControl[]> {
     return this.openf1Client.fetchRaceControl(params);
   }
 

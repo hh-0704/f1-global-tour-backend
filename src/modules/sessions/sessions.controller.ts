@@ -1,5 +1,18 @@
-import { Controller, Get, Query, Param, Post, ParseIntPipe } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiParam, ApiQuery, ApiResponse } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Query,
+  Param,
+  Post,
+  ParseIntPipe,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiParam,
+  ApiQuery,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { SessionsService } from './sessions.service';
 import { RaceFlagsService } from './race-flags.service';
 import { ApiResponseDto } from '../../common/dto/api-response.dto';
@@ -13,23 +26,46 @@ export class SessionsController {
   ) {}
 
   @Get()
-  @ApiOperation({ summary: '세션 목록 조회', description: '국가명·연도로 필터링 가능한 F1 세션 목록 반환' })
+  @ApiOperation({
+    summary: '세션 목록 조회',
+    description: '국가명·연도로 필터링 가능한 F1 세션 목록 반환',
+  })
   @ApiQuery({
     name: 'country',
     required: false,
     description: '국가명 필터',
     enum: [
-      'Bahrain', 'Saudi Arabia', 'Australia', 'Azerbaijan', 'Miami', 'Monaco',
-      'Spain', 'Canada', 'Austria', 'Great Britain', 'Hungary', 'Belgium',
-      'Netherlands', 'Italy', 'Singapore', 'Japan', 'Qatar', 'United States',
-      'Mexico', 'Brazil', 'Las Vegas', 'Abu Dhabi', 'China', 'Emilia Romagna'
-    ]
+      'Bahrain',
+      'Saudi Arabia',
+      'Australia',
+      'Azerbaijan',
+      'Miami',
+      'Monaco',
+      'Spain',
+      'Canada',
+      'Austria',
+      'Great Britain',
+      'Hungary',
+      'Belgium',
+      'Netherlands',
+      'Italy',
+      'Singapore',
+      'Japan',
+      'Qatar',
+      'United States',
+      'Mexico',
+      'Brazil',
+      'Las Vegas',
+      'Abu Dhabi',
+      'China',
+      'Emilia Romagna',
+    ],
   })
   @ApiQuery({
     name: 'year',
     required: false,
     description: '연도 필터',
-    enum: ['2023', '2024', '2025']
+    enum: ['2023', '2024', '2025'],
   })
   @ApiResponse({ status: 200, description: '세션 목록 반환 성공' })
   async getSessions(
@@ -41,10 +77,15 @@ export class SessionsController {
   }
 
   @Get(':sessionKey/drivers')
-  @ApiOperation({ summary: '세션 드라이버 목록 조회', description: '특정 세션에 참가한 전체 드라이버 정보 반환' })
+  @ApiOperation({
+    summary: '세션 드라이버 목록 조회',
+    description: '특정 세션에 참가한 전체 드라이버 정보 반환',
+  })
   @ApiParam({ name: 'sessionKey', description: '세션 고유 식별자' })
   @ApiResponse({ status: 200, description: '드라이버 목록 반환 성공' })
-  async getSessionDrivers(@Param('sessionKey', ParseIntPipe) sessionKey: number) {
+  async getSessionDrivers(
+    @Param('sessionKey', ParseIntPipe) sessionKey: number,
+  ) {
     const drivers = await this.sessionsService.getSessionDrivers(sessionKey);
     return ApiResponseDto.success(drivers);
   }
@@ -61,7 +102,9 @@ export class SessionsController {
   })
   @ApiParam({ name: 'sessionKey', description: '세션 고유 식별자' })
   @ApiResponse({ status: 200, description: '리플레이 프레임 반환 성공' })
-  async getDriverTimings(@Param('sessionKey', ParseIntPipe) sessionKey: number) {
+  async getDriverTimings(
+    @Param('sessionKey', ParseIntPipe) sessionKey: number,
+  ) {
     const data = await this.sessionsService.getDriverTimings(sessionKey);
     return ApiResponseDto.success(data);
   }
@@ -85,7 +128,8 @@ export class SessionsController {
   @Post(':sessionKey/start-replay')
   @ApiOperation({
     summary: '리플레이 시작 (데이터 프리로드)',
-    description: 'drivers/laps/intervals/stints를 OpenF1에서 미리 가져옵니다. 현재 Redis 캐시는 미연결 상태입니다.',
+    description:
+      'drivers/laps/intervals/stints를 OpenF1에서 미리 가져옵니다. 현재 Redis 캐시는 미연결 상태입니다.',
   })
   @ApiParam({ name: 'sessionKey', description: '세션 고유 식별자' })
   @ApiResponse({ status: 200, description: '프리로드 완료' })

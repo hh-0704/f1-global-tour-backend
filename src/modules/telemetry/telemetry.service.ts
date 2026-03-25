@@ -3,7 +3,10 @@ import { BaseF1Service } from '../../common/services/base-f1.service';
 import { CachedOpenF1ClientService } from '../../common/services/cached-openf1-client.service';
 import { OpenF1CarData } from '../../common/interfaces/openf1.interface';
 import { F1TransformationsUtil } from '../../common/utils/f1-transformations.util';
-import type { TelemetryFrame, DriverTelemetryResponse } from './interfaces/telemetry.interface';
+import type {
+  TelemetryFrame,
+  DriverTelemetryResponse,
+} from './interfaces/telemetry.interface';
 
 interface CacheEntry {
   data: DriverTelemetryResponse;
@@ -51,11 +54,15 @@ export class TelemetryService extends BaseF1Service {
         });
         const driver = drivers[0];
         if (!driver) {
-          throw new Error(`Driver ${driverNumber} not found in session ${sessionKey}`);
+          throw new Error(
+            `Driver ${driverNumber} not found in session ${sessionKey}`,
+          );
         }
 
         // car_data 조회 (대량 데이터)
-        this.logger.debug(`Fetching car_data for driver ${driverNumber} in session ${sessionKey}...`);
+        this.logger.debug(
+          `Fetching car_data for driver ${driverNumber} in session ${sessionKey}...`,
+        );
         const carData = await this.cachedOpenf1Client.fetchCarData({
           session_key: sessionKey,
           driver_number: driverNumber,
@@ -100,7 +107,9 @@ export class TelemetryService extends BaseF1Service {
       .filter((t) => t > 0 && Number.isFinite(t));
 
     if (validTimes.length === 0) {
-      throw new Error(`Cannot determine race start time for session ${sessionKey}`);
+      throw new Error(
+        `Cannot determine race start time for session ${sessionKey}`,
+      );
     }
 
     // 프론트엔드와 동일한 클러스터링 알고리즘 사용

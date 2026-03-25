@@ -11,16 +11,23 @@ export class LapsService extends BaseF1Service {
     super(cachedOpenf1Client);
   }
 
-  async getSessionLaps(sessionKey: number, lapNumber?: number): Promise<TransformedLap[]> {
-    return this.executeWithErrorHandling(async () => {
-      const params: LapsQueryParams = {
-        session_key: sessionKey,
-        ...(lapNumber != null && { lap_number: lapNumber }),
-      };
+  async getSessionLaps(
+    sessionKey: number,
+    lapNumber?: number,
+  ): Promise<TransformedLap[]> {
+    return this.executeWithErrorHandling(
+      async () => {
+        const params: LapsQueryParams = {
+          session_key: sessionKey,
+          ...(lapNumber != null && { lap_number: lapNumber }),
+        };
 
-      const laps = await this.cachedOpenf1Client.fetchLaps(params);
-      return laps.map((lap) => this.transformLapData(lap));
-    }, 'fetch session laps', { sessionKey, lapNumber });
+        const laps = await this.cachedOpenf1Client.fetchLaps(params);
+        return laps.map((lap) => this.transformLapData(lap));
+      },
+      'fetch session laps',
+      { sessionKey, lapNumber },
+    );
   }
 
   private transformLapData(lap: OpenF1Lap): TransformedLap {

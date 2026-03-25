@@ -1,15 +1,18 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
 import { Test, TestingModule } from '@nestjs/testing';
 import { TelemetryService } from './telemetry.service';
 import { CachedOpenF1ClientService } from '../../common/services/cached-openf1-client.service';
-import { OpenF1CarData } from '../../common/interfaces/openf1.interface';
+import {
+  OpenF1CarData,
+  OpenF1Driver,
+  OpenF1Lap,
+} from '../../common/interfaces/openf1.interface';
 
 const SESSION_KEY = 9472;
 const DRIVER_NUMBER = 1;
 const RACE_START = '2024-04-07T04:07:00.000Z';
 const RACE_START_MS = new Date(RACE_START).getTime();
 
-const DRIVER = {
+const DRIVER: OpenF1Driver = {
   meeting_key: 1,
   session_key: SESSION_KEY,
   driver_number: DRIVER_NUMBER,
@@ -19,7 +22,7 @@ const DRIVER = {
   team_colour: '3671C6',
 };
 
-const LAP1 = {
+const LAP1: OpenF1Lap = {
   meeting_key: 1,
   session_key: SESSION_KEY,
   driver_number: DRIVER_NUMBER,
@@ -32,7 +35,11 @@ const LAP1 = {
   duration_sector_3: 30,
 };
 
-const makeCarData = (offsetSec: number, speed: number, drs = 0): OpenF1CarData => ({
+const makeCarData = (
+  offsetSec: number,
+  speed: number,
+  drs = 0,
+): OpenF1CarData => ({
   meeting_key: 1,
   session_key: SESSION_KEY,
   driver_number: DRIVER_NUMBER,
@@ -58,7 +65,7 @@ describe('TelemetryService', () => {
       fetchCarData: jest.fn(),
       fetchRaceControl: jest.fn(),
       preloadReplayData: jest.fn(),
-    } as any;
+    } as unknown as jest.Mocked<CachedOpenF1ClientService>;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -71,8 +78,8 @@ describe('TelemetryService', () => {
   });
 
   function setupDefaultMocks(carData: OpenF1CarData[] = []) {
-    mockClient.fetchLaps.mockResolvedValue([LAP1] as any);
-    mockClient.fetchDrivers.mockResolvedValue([DRIVER] as any);
+    mockClient.fetchLaps.mockResolvedValue([LAP1]);
+    mockClient.fetchDrivers.mockResolvedValue([DRIVER]);
     mockClient.fetchCarData.mockResolvedValue(carData);
   }
 
@@ -152,9 +159,9 @@ describe('TelemetryService', () => {
 
   it('getDriverTelemetry: 레이스 시작 전(timeOffset<0) 데이터는 프레임에 포함되지 않는다', async () => {
     setupDefaultMocks([
-      makeCarData(-5, 50),  // 레이스 시작 5초 전
-      makeCarData(-1, 80),  // 레이스 시작 1초 전
-      makeCarData(1, 200),  // 레이스 시작 1초 후
+      makeCarData(-5, 50), // 레이스 시작 5초 전
+      makeCarData(-1, 80), // 레이스 시작 1초 전
+      makeCarData(1, 200), // 레이스 시작 1초 후
     ]);
 
     const result = await service.getDriverTelemetry(SESSION_KEY, DRIVER_NUMBER);
@@ -178,20 +185,18 @@ describe('TelemetryService', () => {
   // ── 드라이버 없으면 에러 ──────────────────────────────────────────────────────
 
   it('getDriverTelemetry: 드라이버를 찾을 수 없으면 에러를 throw한다', async () => {
-    mockClient.fetchLaps.mockResolvedValue([LAP1] as any);
+    mockClient.fetchLaps.mockResolvedValue([LAP1]);
     mockClient.fetchDrivers.mockResolvedValue([]);
     mockClient.fetchCarData.mockResolvedValue([]);
 
-    await expect(
-      service.getDriverTelemetry(SESSION_KEY, 99),
-    ).rejects.toThrow();
+    await expect(service.getDriverTelemetry(SESSION_KEY, 99)).rejects.toThrow();
   });
 
   // ── 랩 데이터 없으면 에러 ─────────────────────────────────────────────────────
 
   it('getDriverTelemetry: lap1 데이터가 없으면 레이스 시작 시간을 결정할 수 없어 에러를 throw한다', async () => {
     mockClient.fetchLaps.mockResolvedValue([]);
-    mockClient.fetchDrivers.mockResolvedValue([DRIVER] as any);
+    mockClient.fetchDrivers.mockResolvedValue([DRIVER]);
     mockClient.fetchCarData.mockResolvedValue([makeCarData(1, 200)]);
 
     await expect(
@@ -215,7 +220,9 @@ describe('TelemetryService', () => {
 
     await service.getDriverTelemetry(SESSION_KEY, DRIVER_NUMBER);
     // 다른 드라이버 요청
-    mockClient.fetchDrivers.mockResolvedValue([{ ...DRIVER, driver_number: 44, name_acronym: 'HAM' }] as any);
+    mockClient.fetchDrivers.mockResolvedValue([
+      { ...DRIVER, driver_number: 44, name_acronym: 'HAM' },
+    ]);
     await service.getDriverTelemetry(SESSION_KEY, 44);
 
     expect(mockClient.fetchCarData).toHaveBeenCalledTimes(2);
@@ -233,15 +240,19 @@ describe('TelemetryService', () => {
       { ...LAP1, driver_number: 99, date_start: outlierStart },
       { ...LAP1, driver_number: 1, date_start: normalStart1 },
       { ...LAP1, driver_number: 44, date_start: normalStart2 },
-    ] as any);
-    mockClient.fetchDrivers.mockResolvedValue([DRIVER] as any);
+    ]);
+    mockClient.fetchDrivers.mockResolvedValue([DRIVER]);
 
     // car_data는 04:07:05 (정상 클러스터 기준 5초 후)
-    const carDataDate = new Date(new Date(normalStart1).getTime() + 5000).toISOString();
-    mockClient.fetchCarData.mockResolvedValue([{
-      ...makeCarData(0, 200),
-      date: carDataDate,
-    }]);
+    const carDataDate = new Date(
+      new Date(normalStart1).getTime() + 5000,
+    ).toISOString();
+    mockClient.fetchCarData.mockResolvedValue([
+      {
+        ...makeCarData(0, 200),
+        date: carDataDate,
+      },
+    ]);
 
     const result = await service.getDriverTelemetry(SESSION_KEY, DRIVER_NUMBER);
 

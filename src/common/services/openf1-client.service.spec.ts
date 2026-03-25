@@ -1,8 +1,7 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Test, TestingModule } from '@nestjs/testing';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
-import { of, throwError } from 'rxjs';
+import { of, throwError, Observable } from 'rxjs';
 import { AxiosError, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { HttpException } from '@nestjs/common';
 import { OpenF1ClientService } from './openf1-client.service';
@@ -18,6 +17,10 @@ function mockAxiosResponse<T>(data: T): AxiosResponse<T> {
     headers: {},
     config: { headers: {} } as InternalAxiosRequestConfig,
   };
+}
+
+function mockAxiosObservable<T>(data: T): Observable<AxiosResponse<T>> {
+  return of(mockAxiosResponse(data));
 }
 
 function mock429Error(): AxiosError {
@@ -64,7 +67,7 @@ describe('OpenF1ClientService', () => {
 
   it('fetchSessions: 세션 목록을 반환한다', async () => {
     const sessions = [{ session_key: 9472 }];
-    httpService.get.mockReturnValue(of(mockAxiosResponse(sessions)) as any);
+    httpService.get.mockReturnValue(mockAxiosObservable(sessions));
 
     const result = await service.fetchSessions({ country_name: 'Japan' });
 
@@ -75,7 +78,7 @@ describe('OpenF1ClientService', () => {
   });
 
   it('fetchSessions: 파라미터 없이 호출 가능하다', async () => {
-    httpService.get.mockReturnValue(of(mockAxiosResponse([])) as any);
+    httpService.get.mockReturnValue(mockAxiosObservable([]));
 
     const result = await service.fetchSessions();
 
@@ -86,7 +89,7 @@ describe('OpenF1ClientService', () => {
 
   it('fetchDrivers: 드라이버 목록을 반환한다', async () => {
     const drivers = [{ driver_number: 1, name_acronym: 'VER' }];
-    httpService.get.mockReturnValue(of(mockAxiosResponse(drivers)) as any);
+    httpService.get.mockReturnValue(mockAxiosObservable(drivers));
 
     const result = await service.fetchDrivers({ session_key: 9472 });
 
@@ -97,7 +100,7 @@ describe('OpenF1ClientService', () => {
 
   it('fetchLaps: 랩 데이터를 반환한다', async () => {
     const laps = [{ lap_number: 1 }];
-    httpService.get.mockReturnValue(of(mockAxiosResponse(laps)) as any);
+    httpService.get.mockReturnValue(mockAxiosObservable(laps));
 
     const result = await service.fetchLaps({ session_key: 9472 });
 
@@ -108,9 +111,12 @@ describe('OpenF1ClientService', () => {
 
   it('fetchCarData: car_data를 반환한다', async () => {
     const carData = [{ speed: 300 }];
-    httpService.get.mockReturnValue(of(mockAxiosResponse(carData)) as any);
+    httpService.get.mockReturnValue(mockAxiosObservable(carData));
 
-    const result = await service.fetchCarData({ session_key: 9472, driver_number: 1 });
+    const result = await service.fetchCarData({
+      session_key: 9472,
+      driver_number: 1,
+    });
 
     expect(result).toEqual(carData);
   });
@@ -119,7 +125,7 @@ describe('OpenF1ClientService', () => {
 
   it('fetchIntervals: interval 데이터를 반환한다', async () => {
     const intervals = [{ gap_to_leader: 0 }];
-    httpService.get.mockReturnValue(of(mockAxiosResponse(intervals)) as any);
+    httpService.get.mockReturnValue(mockAxiosObservable(intervals));
 
     const result = await service.fetchIntervals({ session_key: 9472 });
 
@@ -130,7 +136,7 @@ describe('OpenF1ClientService', () => {
 
   it('fetchRaceControl: race_control 메시지를 반환한다', async () => {
     const messages = [{ category: 'Flag', message: 'GREEN FLAG' }];
-    httpService.get.mockReturnValue(of(mockAxiosResponse(messages)) as any);
+    httpService.get.mockReturnValue(mockAxiosObservable(messages));
 
     const result = await service.fetchRaceControl({ session_key: 9472 });
 
@@ -141,7 +147,7 @@ describe('OpenF1ClientService', () => {
 
   it('fetchStints: stint 데이터를 반환한다', async () => {
     const stints = [{ compound: 'SOFT' }];
-    httpService.get.mockReturnValue(of(mockAxiosResponse(stints)) as any);
+    httpService.get.mockReturnValue(mockAxiosObservable(stints));
 
     const result = await service.fetchStints({ session_key: 9472 });
 
@@ -153,8 +159,8 @@ describe('OpenF1ClientService', () => {
   it('fetchDrivers: 429 응답 시 재시도 후 성공한다', async () => {
     const drivers = [{ driver_number: 1 }];
     httpService.get
-      .mockReturnValueOnce(throwError(() => mock429Error()) as any)
-      .mockReturnValueOnce(of(mockAxiosResponse(drivers)) as any);
+      .mockReturnValueOnce(throwError(() => mock429Error()))
+      .mockReturnValueOnce(mockAxiosObservable(drivers));
 
     const result = await service.fetchDrivers({ session_key: 9472 });
 
@@ -166,7 +172,7 @@ describe('OpenF1ClientService', () => {
 
   it('fetchSessions: 서킷 브레이커 OPEN 시 빈 배열(fallback)을 반환한다', async () => {
     // 서킷 브레이커를 OPEN으로 전이
-    httpService.get.mockReturnValue(throwError(() => new Error('fail')) as any);
+    httpService.get.mockReturnValue(throwError(() => new Error('fail')));
     for (let i = 0; i < 5; i++) {
       await service.fetchSessions().catch(() => {});
     }
@@ -179,7 +185,7 @@ describe('OpenF1ClientService', () => {
   // ── buildUrl ──────────────────────────────────────────────────────────────────
 
   it('fetchLaps: 쿼리 파라미터가 URL에 포함된다', async () => {
-    httpService.get.mockReturnValue(of(mockAxiosResponse([])) as any);
+    httpService.get.mockReturnValue(mockAxiosObservable([]));
 
     await service.fetchLaps({ session_key: 9472, lap_number: 3 });
 
@@ -189,7 +195,7 @@ describe('OpenF1ClientService', () => {
   });
 
   it('fetchLaps: undefined/null 파라미터는 URL에서 제외된다', async () => {
-    httpService.get.mockReturnValue(of(mockAxiosResponse([])) as any);
+    httpService.get.mockReturnValue(mockAxiosObservable([]));
 
     await service.fetchLaps({ session_key: 9472, lap_number: undefined });
 
@@ -207,7 +213,7 @@ describe('OpenF1ClientService', () => {
   });
 
   it('resetCircuitBreaker: 서킷 브레이커를 리셋한다', async () => {
-    httpService.get.mockReturnValue(throwError(() => new Error('fail')) as any);
+    httpService.get.mockReturnValue(throwError(() => new Error('fail')));
     for (let i = 0; i < 5; i++) {
       await service.fetchSessions().catch(() => {});
     }
@@ -221,7 +227,7 @@ describe('OpenF1ClientService', () => {
 
   it('fetchSessions: API 에러 시 HttpException(SERVICE_UNAVAILABLE)을 throw한다', async () => {
     const axiosError = new AxiosError('Network Error');
-    httpService.get.mockReturnValue(throwError(() => axiosError) as any);
+    httpService.get.mockReturnValue(throwError(() => axiosError));
 
     // 서킷 브레이커가 아직 CLOSED이므로 첫 호출에서 바로 에러
     await expect(service.fetchSessions()).rejects.toThrow(HttpException);

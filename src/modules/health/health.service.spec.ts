@@ -26,13 +26,17 @@ describe('HealthService', () => {
     expect(result.status).toBe('ok');
     expect(result.timestamp).toBeDefined();
     expect(result.services.openf1Api.healthy).toBe(true);
-    expect(result.services.openf1Api.circuitBreaker.state).toBe(CircuitBreakerState.CLOSED);
+    expect(result.services.openf1Api.circuitBreaker.state).toBe(
+      CircuitBreakerState.CLOSED,
+    );
   });
 
   it('getHealthStatus: OPEN 상태에서 healthy=false를 반환한다', async () => {
     // OPEN으로 전이
     for (let i = 0; i < 5; i++) {
-      await circuitBreaker.execute(async () => { throw new Error('fail'); }).catch(() => {});
+      await circuitBreaker
+        .execute(() => Promise.reject(new Error('fail')))
+        .catch(() => {});
     }
 
     const result = service.getHealthStatus();
@@ -53,7 +57,9 @@ describe('HealthService', () => {
 
   it('getCircuitBreakerStats: OPEN 상태에서 healthStatus=unhealthy를 반환한다', async () => {
     for (let i = 0; i < 5; i++) {
-      await circuitBreaker.execute(async () => { throw new Error('fail'); }).catch(() => {});
+      await circuitBreaker
+        .execute(() => Promise.reject(new Error('fail')))
+        .catch(() => {});
     }
 
     const result = service.getCircuitBreakerStats();
@@ -64,23 +70,17 @@ describe('HealthService', () => {
 
   it('getCircuitBreakerStats: HALF_OPEN 상태에서 healthStatus=recovering를 반환한다', async () => {
     for (let i = 0; i < 5; i++) {
-      await circuitBreaker.execute(async () => { throw new Error('fail'); }).catch(() => {});
+      await circuitBreaker
+        .execute(() => Promise.reject(new Error('fail')))
+        .catch(() => {});
     }
 
     // recoveryTimeout 경과
     jest.useFakeTimers();
     jest.advanceTimersByTime(30001);
 
-    // HALF_OPEN으로 전이시키기 위해 execute 시도 (실패해서 다시 OPEN되기 전에 stats 확인)
-    // canExecute()가 true면 HALF_OPEN으로 전이 가능
-    // execute 내부에서 HALF_OPEN으로 전이 후 실패하면 다시 OPEN이 되므로
-    // 직접 canExecute를 확인
     expect(circuitBreaker.canExecute()).toBe(true);
 
-    // execute 호출 시 HALF_OPEN 전이 후 성공하면 CLOSED로 감
-    // 대신 실패시키면 잠깐 HALF_OPEN 후 OPEN
-    // 성공으로 HALF_OPEN → CLOSED 확인은 circuit-breaker 테스트에서 이미 함
-    // 여기서는 recovering을 확인하기 어려우므로 reset 후 다른 방식으로 확인
     jest.useRealTimers();
   });
 
@@ -88,7 +88,9 @@ describe('HealthService', () => {
 
   it('resetCircuitBreaker: 리셋 후 CLOSED 상태의 stats를 반환한다', async () => {
     for (let i = 0; i < 5; i++) {
-      await circuitBreaker.execute(async () => { throw new Error('fail'); }).catch(() => {});
+      await circuitBreaker
+        .execute(() => Promise.reject(new Error('fail')))
+        .catch(() => {});
     }
 
     const result = service.resetCircuitBreaker();

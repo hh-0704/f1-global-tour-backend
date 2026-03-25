@@ -13,7 +13,10 @@ export class HealthController {
   constructor(private readonly healthService: HealthService) {}
 
   @Get()
-  @ApiOperation({ summary: '앱 상태 확인', description: 'Circuit Breaker 상태를 포함한 전체 헬스체크' })
+  @ApiOperation({
+    summary: '앱 상태 확인',
+    description: 'Circuit Breaker 상태를 포함한 전체 헬스체크',
+  })
   @ApiResponse({ status: 200, description: '정상 동작 중' })
   getHealth(): HealthStatus {
     return this.healthService.getHealthStatus();
@@ -22,7 +25,8 @@ export class HealthController {
   @Get('circuit-breaker')
   @ApiOperation({
     summary: 'Circuit Breaker 통계 조회',
-    description: 'OpenF1 API Circuit Breaker 상태(CLOSED/OPEN/HALF_OPEN) 및 요청 통계 반환',
+    description:
+      'OpenF1 API Circuit Breaker 상태(CLOSED/OPEN/HALF_OPEN) 및 요청 통계 반환',
   })
   @ApiResponse({ status: 200, description: 'Circuit Breaker 통계' })
   getCircuitBreakerStats(): CircuitBreakerStatsWithHealth {

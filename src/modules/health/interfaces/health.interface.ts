@@ -1,6 +1,10 @@
 import { CircuitBreakerStats } from '../../../common/services/circuit-breaker.service';
 
-export type HealthStatusValue = 'healthy' | 'recovering' | 'unhealthy' | 'unknown';
+export type HealthStatusValue =
+  | 'healthy'
+  | 'recovering'
+  | 'unhealthy'
+  | 'unknown';
 
 export interface HealthStatus {
   status: 'ok';

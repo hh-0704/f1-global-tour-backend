@@ -1,5 +1,11 @@
 export type SectorPerformance = 'fastest' | 'personal_best' | 'normal' | 'none';
-export type TireCompound = 'SOFT' | 'MEDIUM' | 'HARD' | 'INTERMEDIATE' | 'WET' | 'UNKNOWN';
+export type TireCompound =
+  | 'SOFT'
+  | 'MEDIUM'
+  | 'HARD'
+  | 'INTERMEDIATE'
+  | 'WET'
+  | 'UNKNOWN';
 
 export interface MiniSector {
   sector1: SectorPerformance;

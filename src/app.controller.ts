@@ -8,7 +8,10 @@ export class AppController {
   constructor(private readonly appService: AppService) {}
 
   @Get()
-  @ApiOperation({ summary: 'API 정보', description: 'API 이름, 버전, 문서 경로 반환' })
+  @ApiOperation({
+    summary: 'API 정보',
+    description: 'API 이름, 버전, 문서 경로 반환',
+  })
   @ApiResponse({ status: 200, description: 'API 정보 반환 성공' })
   getApiInfo(): ApiInfo {
     return this.appService.getApiInfo();
