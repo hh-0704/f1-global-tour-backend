@@ -8,6 +8,7 @@ import {
   OpenF1Interval,
   OpenF1RaceControl,
   OpenF1Stint,
+  OpenF1Location,
 } from '../interfaces/openf1.interface';
 import {
   SessionsQueryParams,
@@ -17,6 +18,7 @@ import {
   IntervalsQueryParams,
   RaceControlQueryParams,
   StintsQueryParams,
+  LocationQueryParams,
 } from '../interfaces/query-params.interface';
 
 @Injectable()
@@ -55,6 +57,22 @@ export class CachedOpenF1ClientService {
 
   async fetchStints(params: StintsQueryParams): Promise<OpenF1Stint[]> {
     return this.openf1Client.fetchStints(params);
+  }
+
+  /**
+   * 한 드라이버의 레이스 윈도우 location (date 청크 페이징).
+   *
+   * 현재는 패스스루. plan.md 의 RDB+Redis 캐시 도입 시 키 `raw:location:{sk}:{driver}` 로 흡수.
+   * ⚠ 캐싱 시 **빈 결과 `[]` 는 저장 금지** — 피트인/수집실패로 일시적으로 비었을 수 있어,
+   *    빈 배열을 캐시하면 영구 결손이 된다(다음 요청 때 재수집되도록 비저장).
+   */
+  async fetchLocation(params: LocationQueryParams): Promise<OpenF1Location[]> {
+    return this.openf1Client.fetchLocationWindow(
+      params.session_key,
+      params.driver_number!,
+      params.dateGt,
+      params.dateLt,
+    );
   }
 
   async preloadReplayData(sessionKey: number): Promise<{

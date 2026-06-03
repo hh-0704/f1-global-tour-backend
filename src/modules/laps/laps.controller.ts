@@ -18,9 +18,15 @@ export class LapsController {
   @Get('session/:sessionKey')
   @ApiOperation({
     summary: '세션 랩 데이터 조회',
-    description: '세션의 전체 랩 데이터 반환. lapNumber 지정 시 해당 랩만 반환',
+    description:
+      '세션의 전체 랩 데이터 반환. driverNumber·lapNumber 지정 시 해당 항목만 반환',
   })
   @ApiParam({ name: 'sessionKey', description: '세션 고유 식별자' })
+  @ApiQuery({
+    name: 'driverNumber',
+    required: false,
+    description: '특정 드라이버 번호 필터',
+  })
   @ApiQuery({
     name: 'lapNumber',
     required: false,
@@ -29,11 +35,17 @@ export class LapsController {
   @ApiResponse({ status: 200, description: '랩 데이터 반환 성공' })
   async getSessionLaps(
     @Param('sessionKey', ParseIntPipe) sessionKey: number,
+    @Query('driverNumber', new ParseIntPipe({ optional: true }))
+    driverNumber?: number,
     @Query('lapNumber', new ParseIntPipe({ optional: true }))
     lapNumber?: number,
   ): Promise<ApiResponseDto<TransformedLap[]>> {
     return ApiResponseDto.success(
-      await this.lapsService.getSessionLaps(sessionKey, lapNumber),
+      await this.lapsService.getSessionLaps(
+        sessionKey,
+        driverNumber,
+        lapNumber,
+      ),
     );
   }
 }

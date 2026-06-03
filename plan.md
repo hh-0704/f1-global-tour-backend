@@ -77,10 +77,13 @@ Controller → Service → CachedOpenF1ClientService → OpenF1ClientService →
 - `drivers`
 - `stints`
 - `race_control`
+- `location` (드라이버 단위, 대용량 — §6.6)
 
 ### (B) 가공 결과 — 무거운 계산 결과 (재계산 방지)
 - `driver_timings` 프레임 (`DriverDisplayFrame[]`)
 - `race_flags` 결과
+- `positions` 결과 (`PositionsResponse`, `{t,lng,lat}` 시계열 — §6.6)
+- `raceStart` (보조, 불변 — §6.6)
 
 ## 6. 테이블 스키마 (초안)
 
@@ -137,6 +140,39 @@ race_flags_cache      (session_key PK, result jsonb, logic_version int, computed
   기존 spec들은 `CachedOpenF1ClientService` 를 mock하므로 영향 적음. 캐시 레이어 자체 테스트만 Prisma mock 추가
 - `.gitignore` 에 생성물 점검 (`@prisma/client` 는 node_modules)
 
+## 6.6 positions / location 캐싱 통합 (리플레이 위치 정확도) — replay-implementation-plan.md 이관
+
+> 별도 작업으로 **positions 파이프라인은 구현 완료**(calibration/race-time/positions 모듈,
+> `GET /sessions/:sk/positions` → 드라이버별 `{t,lng,lat}` 시계열). 현재는 **인메모리 캐시 + single-flight**.
+> 본 RDB+Redis 전환에 positions 결과와 raw location 캐싱을 함께 얹는다(같은 3단 폴백·규칙 적용).
+
+### 추가 저장 대상
+- **(A) 원본 추가 — OpenF1 `/location`**: **드라이버 단위**로 저장(세션·드라이버당 수만 행, 매우 큼).
+  - 키 `raw:location:{sk}:{driver}`. 레이스 date 윈도우 청크 페이징(`fetchLocationWindow`)으로 수집.
+  - **빈 결과 `[]` 저장 금지(규칙 ①)** — 피트인/수집실패로 일시적으로 비었을 수 있어 영구 결손 방지.
+- **(B) 가공 추가 — `positions` 결과(`PositionsResponse`)**: 무겁고 불변 → jsonb 영구저장 + Redis 핫캐시.
+  - 키 `positions:{sk}`, `logic_version = POSITIONS_LOGIC_VERSION`
+    (좌표 계수·도로스냅·다운샘플 등 파이프라인 로직 변경 시 +1 → 자동 재계산).
+- **보조 — `raceStart:{sk}`**: 레이스 시작 절대 ms(불변, race-time 단일 기준). 가벼우나 캐시 가치 있음.
+
+### 추가 테이블 스키마(초안)
+```
+openf1_location   (session_key, driver_number, raw jsonb, fetched_at)   -- (sk, driver) 단위
+positions_cache   (session_key PK, result jsonb, logic_version int, computed_at)
+race_start_cache  (session_key PK, race_start_ms bigint, computed_at)   -- 또는 openf1_sessions 메타 컬럼
+```
+
+### 캐시 레이어 통합 지점 (현재 인메모리 → RDB+Redis 치환)
+- `CachedOpenF1ClientService.fetchLocation` (현재 패스스루) → location raw 3단 폴백(Redis→RDB→OpenF1), **빈 결과 저장 금지**, 드라이버 단위 저장.
+- `PositionsService` (현재 인메모리 Map + single-flight) → `positions:{sk}` RDB jsonb + Redis, `logic_version` 체크.
+- `RaceTimeService` (현재 인메모리 Map) → `raceStart:{sk}` 캐시.
+- `start-replay` 프리워밍이 이미 positions 백그라운드 빌드를 호출 → RDB 적재로 자연 영구화.
+
+### positions 응답 크기 주의 (성능)
+- 측정(20드라이버, ~5분 데이터): **990KB 비압축 / 292KB gzip**, 다운샘플 818/1177(69%).
+- **풀레이스(~90분)는 ~18배** → gzip 수 MB 가능. RDB jsonb 컬럼 크기·Redis 메모리 고려.
+- 최적화 여지: `DOWNSAMPLE_HZ`↓, 레이스 윈도우 축소(현재 `session.date_end`/+3h 상한 → 실 종료시각으로).
+
 ## 7. 작업 단계 (Tasks)
 
 ### 1단계 — RDB 영구 저장 (429 해결 핵심)
@@ -157,6 +193,9 @@ race_flags_cache      (session_key PK, result jsonb, logic_version int, computed
 - [ ] `driver_timings` / `race_flags` 가공 결과 DB 저장 연동 — `SessionsService`/`RaceFlagsService` 수정, `logic_version` 체크 포함 (규칙 ③)
 - [ ] 기존 인메모리 `framesCache` Map / RaceFlags 캐시 제거 → DB로 대체
 - [ ] 워밍업 엔드포인트(`POST /start-replay`) 강화: **동기**로 원본+프레임 계산·저장
+      (참고: positions 프리워밍은 이미 백그라운드 호출 연결됨 — §6.6)
+- [ ] **positions/location 통합 (§6.6)**: `fetchLocation` location raw 캐싱(드라이버 단위·빈결과 가드),
+      `positions_cache`+`PositionsService` RDB/Redis 연동(`POSITIONS_LOGIC_VERSION`), `raceStart` 캐시
 - [ ] 테스트: `PrismaService` mock 주입, 캐시 레이어 hit/miss·빈결과 가드 테스트 추가 (규칙 ⑤)
 
 ### 2단계 — Redis 핫 캐시

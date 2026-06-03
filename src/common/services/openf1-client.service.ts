@@ -12,6 +12,7 @@ import {
   OpenF1Interval,
   OpenF1RaceControl,
   OpenF1Stint,
+  OpenF1Location,
 } from '../interfaces/openf1.interface';
 import {
   SessionsQueryParams,
@@ -21,6 +22,7 @@ import {
   IntervalsQueryParams,
   RaceControlQueryParams,
   StintsQueryParams,
+  LocationQueryParams,
 } from '../interfaces/query-params.interface';
 
 @Injectable()
@@ -236,6 +238,113 @@ export class OpenF1ClientService {
         );
       }
     }, []);
+  }
+
+  /**
+   * /location 단일 요청 (한 드라이버, 선택적 date 윈도우).
+   * date 연산자(date>=, date<=)는 URLSearchParams 가 인코딩하면 OpenF1 이 못 읽으므로 직접 조립.
+   * 대량 윈도우는 fetchLocationWindow(청크 페이징)를 사용할 것.
+   */
+  async fetchLocation(params: LocationQueryParams): Promise<OpenF1Location[]> {
+    return this.circuitBreaker.execute(async () => {
+      const url = this.buildLocationUrl(params);
+      this.logger.debug(`Fetching location from: ${url}`);
+      try {
+        const data = await this.fetchWithRetry<OpenF1Location[]>(
+          url,
+          'location',
+        );
+        this.logger.debug(`Retrieved ${data.length} location points`);
+        return data;
+      } catch (error) {
+        this.logger.error(
+          `OpenF1 API Error (location): ${(error as AxiosError).message}`,
+        );
+        throw new HttpException(
+          'Failed to fetch location data',
+          HttpStatus.SERVICE_UNAVAILABLE,
+        );
+      }
+    }, []);
+  }
+
+  /**
+   * 한 드라이버의 레이스 윈도우 location 을 date 청크로 나눠 순차 수집.
+   *
+   * /location 은 세션·드라이버당 수만 행(~3.7Hz) → 한 번에 받으면 응답이 과대하고 429 위험.
+   * [dateGt, dateLt] 를 chunkMinutes 단위로 쪼개 순차 요청(병렬 금지=rate-limit 회피),
+   * 경계 중복 샘플은 date 로 dedupe 후 시간순 정렬해 반환.
+   * 윈도우(dateGt/dateLt)가 없으면 단일 요청으로 폴백.
+   */
+  async fetchLocationWindow(
+    sessionKey: number,
+    driverNumber: number,
+    dateGt?: string,
+    dateLt?: string,
+    chunkMinutes = 20,
+  ): Promise<OpenF1Location[]> {
+    const boundaries = this.dateChunks(dateGt, dateLt, chunkMinutes);
+    if (!boundaries) {
+      return this.fetchLocation({
+        session_key: sessionKey,
+        driver_number: driverNumber,
+        dateGt,
+        dateLt,
+      });
+    }
+
+    const byDate = new Map<string, OpenF1Location>();
+    for (let i = 0; i < boundaries.length - 1; i++) {
+      const chunk = await this.fetchLocation({
+        session_key: sessionKey,
+        driver_number: driverNumber,
+        dateGt: boundaries[i],
+        dateLt: boundaries[i + 1],
+      });
+      for (const row of chunk) byDate.set(row.date, row); // 경계 중복 제거
+    }
+
+    return Array.from(byDate.values()).sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+    );
+  }
+
+  // [gt, lt] 를 chunkMinutes 간격 ISO 경계 배열로. 윈도우 불완전/역전이면 null(단일요청 폴백).
+  private dateChunks(
+    dateGt?: string,
+    dateLt?: string,
+    chunkMinutes = 20,
+  ): string[] | null {
+    if (!dateGt || !dateLt) return null;
+    const start = new Date(dateGt).getTime();
+    const end = new Date(dateLt).getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+      return null;
+    }
+    const step = chunkMinutes * 60 * 1000;
+    if (end - start <= step) return null; // 한 청크면 단일요청 폴백
+
+    const out: string[] = [];
+    for (let t = start; t < end; t += step) {
+      out.push(new Date(t).toISOString());
+    }
+    out.push(new Date(end).toISOString());
+    return out;
+  }
+
+  // /location 전용 URL 조립 (date>=, date<= 연산자는 인코딩하지 않고 값만 인코딩).
+  private buildLocationUrl(params: LocationQueryParams): string {
+    const parts: string[] = [`session_key=${params.session_key}`];
+    if (params.driver_number !== undefined) {
+      parts.push(`driver_number=${params.driver_number}`);
+    }
+    if (params.dateGt) {
+      parts.push(`date>=${encodeURIComponent(params.dateGt)}`);
+    }
+    if (params.dateLt) {
+      parts.push(`date<=${encodeURIComponent(params.dateLt)}`);
+    }
+    return `${this.baseUrl}/location?${parts.join('&')}`;
   }
 
   private buildUrl(endpoint: string, params: object): string {

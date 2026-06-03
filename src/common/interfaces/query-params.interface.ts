@@ -41,3 +41,11 @@ export interface StintsQueryParams {
   session_key: number;
   driver_number?: number;
 }
+
+// /location 쿼리. dateGt/dateLt 는 레이스 윈도우(ISO 8601). OpenF1 의 date>=, date<= 연산자로 변환.
+export interface LocationQueryParams {
+  session_key: number;
+  driver_number?: number;
+  dateGt?: string;
+  dateLt?: string;
+}

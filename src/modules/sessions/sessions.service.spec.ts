@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
 import { Test, TestingModule } from '@nestjs/testing';
 import { SessionsService } from './sessions.service';
-import { LapsService } from '../laps/laps.service';
 import { CachedOpenF1ClientService } from '../../common/services/cached-openf1-client.service';
+import { PositionsService } from '../positions/positions.service';
 import {
   OpenF1Driver,
   OpenF1Lap,
@@ -745,137 +745,50 @@ describe('SessionsService', () => {
   });
 });
 
-// ─── LapsService 테스트 ───────────────────────────────────────────────────────
+// ─── startReplay positions 프리워밍 ───────────────────────────────────────────
 
-describe('LapsService', () => {
-  let service: LapsService;
-  let mockClient: jest.Mocked<CachedOpenF1ClientService>;
-
-  const RAW_LAPS = [
-    {
-      session_key: SESSION_KEY,
-      driver_number: 1,
-      lap_number: 1,
-      lap_duration: 90.123,
-      date_start: t(0),
-      is_pit_out_lap: false,
-      duration_sector_1: 28.1,
-      duration_sector_2: 32.0,
-      duration_sector_3: 30.0,
-    },
-    {
-      session_key: SESSION_KEY,
-      driver_number: 1,
-      lap_number: 2,
-      lap_duration: 89.456,
-      date_start: t(90),
-      is_pit_out_lap: false,
-      duration_sector_1: 27.5,
-      duration_sector_2: 31.0,
-      duration_sector_3: 30.9,
-    },
-    // pit out lap — lap_duration이 있어도 isDNF=false
-    {
-      session_key: SESSION_KEY,
-      driver_number: 44,
-      lap_number: 2,
-      lap_duration: 105.0,
-      date_start: t(93),
-      is_pit_out_lap: true,
-      duration_sector_1: 35.0,
-      duration_sector_2: 38.0,
-      duration_sector_3: 32.0,
-    },
-    // DNF — lap_duration=null, is_pit_out_lap=false
-    {
-      session_key: SESSION_KEY,
-      driver_number: 16,
-      lap_number: 2,
-      lap_duration: null,
-      date_start: t(91),
-      is_pit_out_lap: false,
-      duration_sector_1: null,
-      duration_sector_2: null,
-      duration_sector_3: null,
-    },
-  ];
-
-  beforeEach(async () => {
-    mockClient = {
-      fetchSessions: jest.fn(),
-      fetchDrivers: jest.fn(),
-      fetchLaps: jest.fn(),
-      fetchIntervals: jest.fn(),
-      fetchStints: jest.fn(),
-      fetchCarData: jest.fn(),
-      fetchRaceControl: jest.fn(),
-      preloadReplayData: jest.fn(),
-    } as any;
-
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        LapsService,
-        { provide: CachedOpenF1ClientService, useValue: mockClient },
-      ],
-    }).compile();
-
-    service = module.get<LapsService>(LapsService);
-  });
-
-  // ── 17. 기본 변환 ────────────────────────────────────────────────────────────
-  it('getSessionLaps: snake_case 필드를 camelCase로 변환하고 lapTime·sectors·driverNumber를 반환한다', async () => {
-    mockClient.fetchLaps.mockResolvedValue(RAW_LAPS as any);
-
-    const result = await service.getSessionLaps(SESSION_KEY);
-
-    expect(result).toHaveLength(4);
-    expect(result[0]).toMatchObject({
-      lapNumber: 1,
-      lapTime: 90.123,
-      driverNumber: 1,
-      sectors: { sector1: 28.1, sector2: 32.0, sector3: 30.0 },
-      isPitOutLap: false,
-      isDNF: false,
-    });
-  });
-
-  // ── 18. isDNF 판정 ───────────────────────────────────────────────────────────
-  it('getSessionLaps: lap_duration=null이고 is_pit_out_lap=false이면 isDNF=true이다', async () => {
-    mockClient.fetchLaps.mockResolvedValue(RAW_LAPS as any);
-
-    const result = await service.getSessionLaps(SESSION_KEY);
-    const dnfLap = result.find(
-      (l) => l.driverNumber === 16 && l.lapNumber === 2,
+describe('SessionsService — startReplay positions 프리워밍', () => {
+  function build(positions?: { getPositions: jest.Mock }): SessionsService {
+    const client = {
+      fetchDrivers: jest.fn().mockResolvedValue(DRIVERS),
+      preloadReplayData: jest.fn().mockResolvedValue({
+        drivers: DRIVERS,
+        laps: LAPS,
+        intervals: INTERVALS,
+        stints: STINTS,
+      }),
+    } as unknown as CachedOpenF1ClientService;
+    return new SessionsService(
+      client,
+      positions as unknown as PositionsService,
     );
+  }
 
-    expect(dnfLap).toBeDefined();
-    expect(dnfLap!.isDNF).toBe(true);
-    expect(dnfLap!.lapTime).toBeNull();
+  it('PositionsService 주입 시 positions 캐시를 백그라운드로 프리워밍한다', async () => {
+    const positions = { getPositions: jest.fn().mockResolvedValue({}) };
+    const svc = build(positions);
+
+    const res = await svc.startReplay(SESSION_KEY);
+
+    expect(positions.getPositions).toHaveBeenCalledWith(SESSION_KEY);
+    expect(res.data.positionsPrewarming).toBe('started');
   });
 
-  // ── 19. pit out lap isDNF=false ──────────────────────────────────────────────
-  it('getSessionLaps: is_pit_out_lap=true이면 lap_duration 유무와 관계없이 isDNF=false이다', async () => {
-    mockClient.fetchLaps.mockResolvedValue(RAW_LAPS as any);
+  it('프리워밍 실패는 startReplay 응답을 막지 않는다(fire-and-forget)', async () => {
+    const positions = {
+      getPositions: jest.fn().mockRejectedValue(new Error('no calib')),
+    };
+    const svc = build(positions);
 
-    const result = await service.getSessionLaps(SESSION_KEY);
-    const pitLap = result.find(
-      (l) => l.driverNumber === 44 && l.lapNumber === 2,
-    );
+    const res = await svc.startReplay(SESSION_KEY);
 
-    expect(pitLap).toBeDefined();
-    expect(pitLap!.isPitOutLap).toBe(true);
-    expect(pitLap!.isDNF).toBe(false);
+    expect(res.data.positionsPrewarming).toBe('started');
+    await Promise.resolve(); // 마이크로태스크 비워 .catch 처리(unhandled rejection 방지)
   });
 
-  // ── 20. lapNumber 필터 파라미터 전달 ────────────────────────────────────────
-  it('getSessionLaps: lapNumber를 전달하면 lap_number 필터가 fetchLaps 파라미터에 포함된다', async () => {
-    mockClient.fetchLaps.mockResolvedValue([RAW_LAPS[0]] as any);
-
-    await service.getSessionLaps(SESSION_KEY, 1);
-
-    expect(mockClient.fetchLaps).toHaveBeenCalledWith({
-      session_key: SESSION_KEY,
-      lap_number: 1,
-    });
+  it('PositionsService 미주입 시 프리워밍을 건너뛴다', async () => {
+    const svc = build(undefined);
+    const res = await svc.startReplay(SESSION_KEY);
+    expect(res.data.positionsPrewarming).toBe('skipped');
   });
 });

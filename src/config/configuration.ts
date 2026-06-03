@@ -17,4 +17,9 @@ export default () => ({
     ttl: parseInt(process.env.RATE_LIMIT_TTL ?? '60', 10),
     limit: parseInt(process.env.RATE_LIMIT_LIMIT ?? '100', 10),
   },
+
+  // positions 다운샘플 목표 주파수(Hz). 직선은 이 주기로 솎고, 코너는 보존.
+  positions: {
+    downsampleHz: parseInt(process.env.DOWNSAMPLE_HZ ?? '4', 10),
+  },
 });

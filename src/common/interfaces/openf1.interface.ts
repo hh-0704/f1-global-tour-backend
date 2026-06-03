@@ -96,3 +96,15 @@ export interface OpenF1Stint {
   compound: string;
   tyre_age_at_start: number;
 }
+
+// OpenF1 /location — 차량의 트랙별 로컬 직교좌표(x,y,z, 단위 ≈ 0.1m, ~3.7Hz).
+// x,y 는 위경도가 아니라 트랙별 좌표계 → calibration 모듈이 (lng,lat)로 변환.
+export interface OpenF1Location {
+  meeting_key: number;
+  session_key: number;
+  driver_number: number;
+  date: string;
+  x: number;
+  y: number;
+  z: number;
+}

@@ -13,20 +13,25 @@ export class LapsService extends BaseF1Service {
 
   async getSessionLaps(
     sessionKey: number,
+    driverNumber?: number,
     lapNumber?: number,
   ): Promise<TransformedLap[]> {
     return this.executeWithErrorHandling(
       async () => {
-        const params: LapsQueryParams = {
-          session_key: sessionKey,
-          ...(lapNumber != null && { lap_number: lapNumber }),
-        };
-
+        // 캐시 효율: 세션 전체 랩을 한 번 받아(캐시 단위) 메모리에서 필터한다
+        // (plan.md §8.2 규칙 ② — driverNumber/lapNumber 별로 OpenF1 호출/캐시를 쪼개지 않음).
+        const params: LapsQueryParams = { session_key: sessionKey };
         const laps = await this.cachedOpenf1Client.fetchLaps(params);
-        return laps.map((lap) => this.transformLapData(lap));
+
+        return laps
+          .filter(
+            (l) => driverNumber == null || l.driver_number === driverNumber,
+          )
+          .filter((l) => lapNumber == null || l.lap_number === lapNumber)
+          .map((lap) => this.transformLapData(lap));
       },
       'fetch session laps',
-      { sessionKey, lapNumber },
+      { sessionKey, driverNumber, lapNumber },
     );
   }
 

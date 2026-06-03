@@ -1,6 +1,12 @@
-import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
+import {
+  Injectable,
+  HttpException,
+  HttpStatus,
+  Optional,
+} from '@nestjs/common';
 import { BaseF1Service } from '../../common/services/base-f1.service';
 import { CachedOpenF1ClientService } from '../../common/services/cached-openf1-client.service';
+import { PositionsService } from '../positions/positions.service';
 import {
   SessionsQueryParams,
   DriversQueryParams,
@@ -68,7 +74,11 @@ export class SessionsService extends BaseF1Service {
   >();
   private readonly FRAMES_CACHE_TTL_MS = 10 * 60 * 1000; // 10분
 
-  constructor(cachedOpenf1Client: CachedOpenF1ClientService) {
+  constructor(
+    cachedOpenf1Client: CachedOpenF1ClientService,
+    // @Optional: 테스트 등 PositionsModule 미주입 컨텍스트에서는 프리워밍을 건너뛴다.
+    @Optional() private readonly positionsService?: PositionsService,
+  ) {
     super(cachedOpenf1Client);
   }
 
@@ -553,6 +563,18 @@ export class SessionsService extends BaseF1Service {
         const replayData =
           await this.cachedOpenf1Client.preloadReplayData(sessionKey);
 
+        // positions 캐시 프리워밍: 백그라운드로 미리 빌드(응답 차단 안 함).
+        // 드라이버별 /location 순차 수집이라 무거움 → 최초 1회 사전계산해 첫 positions 요청을 빠르게.
+        // 캘리브 없는 서킷(404)·수집 실패는 무시(프리워밍은 best-effort).
+        const prewarming = !!this.positionsService;
+        void this.positionsService?.getPositions(sessionKey).catch((err) => {
+          this.logger.warn(
+            `positions 프리워밍 실패(session=${sessionKey}): ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
+        });
+
         return this.createResponse(sessionKey, {
           cachingStatus: 'completed',
           availableData: [
@@ -563,6 +585,7 @@ export class SessionsService extends BaseF1Service {
             'race_control',
             'stints',
           ],
+          positionsPrewarming: prewarming ? 'started' : 'skipped',
           driverCount: drivers.length,
           dataStats: {
             lapsCount: replayData.laps.length,

@@ -16,10 +16,14 @@ describe('AppController (e2e)', () => {
     await app.init();
   });
 
-  it('/ (GET)', () => {
-    return request(app.getHttpServer() as App)
+  it('/ (GET) — API 정보 반환', async () => {
+    const res = await request(app.getHttpServer() as App)
       .get('/')
-      .expect(200)
-      .expect('Hello F1 World!');
+      .expect(200);
+    expect(res.body).toMatchObject({
+      name: 'F1 Global Tour API',
+      version: '1.0',
+      docs: '/api/docs',
+    });
   });
 });

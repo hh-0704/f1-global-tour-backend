@@ -8,6 +8,7 @@ import { SessionsModule } from './modules/sessions/sessions.module';
 import { LapsModule } from './modules/laps/laps.module';
 import { HealthModule } from './modules/health/health.module';
 import { TelemetryModule } from './modules/telemetry/telemetry.module';
+import { PositionsModule } from './modules/positions/positions.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import configuration from './config/configuration';
 
@@ -22,6 +23,7 @@ import configuration from './config/configuration';
     LapsModule,
     HealthModule,
     TelemetryModule,
+    PositionsModule,
   ],
   controllers: [AppController],
   providers: [

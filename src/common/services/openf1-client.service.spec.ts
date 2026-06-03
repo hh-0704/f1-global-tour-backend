@@ -154,6 +154,86 @@ describe('OpenF1ClientService', () => {
     expect(result).toEqual(stints);
   });
 
+  // ── fetchLocation ─────────────────────────────────────────────────────────────
+
+  it('fetchLocation: location 데이터를 반환한다', async () => {
+    const loc = [{ driver_number: 1, x: 100, y: 200, z: 0, date: 'd' }];
+    httpService.get.mockReturnValue(mockAxiosObservable(loc));
+
+    const result = await service.fetchLocation({
+      session_key: 9472,
+      driver_number: 1,
+    });
+
+    expect(result).toEqual(loc);
+    const calledUrl = httpService.get.mock.calls[0][0];
+    expect(calledUrl).toContain('/location?');
+    expect(calledUrl).toContain('session_key=9472');
+    expect(calledUrl).toContain('driver_number=1');
+  });
+
+  it('fetchLocation: date 연산자는 인코딩 없이, 값만 인코딩해 조립한다', async () => {
+    httpService.get.mockReturnValue(mockAxiosObservable([]));
+
+    await service.fetchLocation({
+      session_key: 9472,
+      driver_number: 1,
+      dateGt: '2023-09-16T13:00:00Z',
+      dateLt: '2023-09-16T13:10:00Z',
+    });
+
+    const calledUrl = httpService.get.mock.calls[0][0];
+    // 연산자(>=, <=)는 원문 유지, 값의 ':' 는 %3A 로 인코딩
+    expect(calledUrl).toContain('date>=2023-09-16T13%3A00%3A00Z');
+    expect(calledUrl).toContain('date<=2023-09-16T13%3A10%3A00Z');
+    expect(calledUrl).not.toContain('date%3E'); // 연산자가 인코딩되면 안 됨
+  });
+
+  // ── fetchLocationWindow ───────────────────────────────────────────────────────
+
+  it('fetchLocationWindow: 윈도우가 없으면 단일 요청', async () => {
+    const loc = [{ date: 'a', x: 1, y: 2 }];
+    httpService.get.mockReturnValue(mockAxiosObservable(loc));
+
+    const result = await service.fetchLocationWindow(9472, 1);
+
+    expect(result).toEqual(loc);
+    expect(httpService.get).toHaveBeenCalledTimes(1);
+  });
+
+  it('fetchLocationWindow: 큰 윈도우는 청크로 나눠 순차 요청 후 dedupe·정렬', async () => {
+    // 60분 윈도우 / 20분 청크 → 경계 [13:00,13:20,13:40,14:00] = 3청크
+    httpService.get
+      .mockReturnValueOnce(
+        mockAxiosObservable([{ date: '2023-09-16T13:30:00Z' }]),
+      )
+      .mockReturnValueOnce(
+        mockAxiosObservable([
+          { date: '2023-09-16T13:10:00Z' },
+          { date: '2023-09-16T13:30:00Z' }, // 1청크와 중복 → dedupe
+        ]),
+      )
+      .mockReturnValueOnce(
+        mockAxiosObservable([{ date: '2023-09-16T13:50:00Z' }]),
+      );
+
+    const result = await service.fetchLocationWindow(
+      9472,
+      1,
+      '2023-09-16T13:00:00Z',
+      '2023-09-16T14:00:00Z',
+      20,
+    );
+
+    expect(httpService.get).toHaveBeenCalledTimes(3);
+    // 중복 13:30 은 1건, 시간순 정렬
+    expect(result.map((r) => r.date)).toEqual([
+      '2023-09-16T13:10:00Z',
+      '2023-09-16T13:30:00Z',
+      '2023-09-16T13:50:00Z',
+    ]);
+  });
+
   // ── 429 재시도 ────────────────────────────────────────────────────────────────
 
   it('fetchDrivers: 429 응답 시 재시도 후 성공한다', async () => {
