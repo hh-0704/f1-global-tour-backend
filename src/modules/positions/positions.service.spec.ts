@@ -1,6 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PositionsService } from './positions.service';
 import { PositionPipelineService } from './position-pipeline.service';
+import { PrismaService } from '../../common/prisma/prisma.service';
+import { CachedOpenF1ClientService } from '../../common/services/cached-openf1-client.service';
 import { PositionsResponse } from './interfaces/positions.interface';
 
 const sample: PositionsResponse = {
@@ -12,13 +14,36 @@ const sample: PositionsResponse = {
 describe('PositionsService — 캐시/single-flight', () => {
   let service: PositionsService;
   let pipeline: { build: jest.Mock };
+  let stored: { logicVersion: number; result: unknown } | null;
 
   beforeEach(async () => {
     pipeline = { build: jest.fn() };
+    stored = null;
+
+    // positions_cache 를 인메모리로 흉내: upsert 시 저장, findUnique 시 반환
+    const mockPrisma = {
+      positionsCache: {
+        findUnique: jest.fn(() => Promise.resolve(stored)),
+        upsert: jest.fn(
+          (args: { create: { logicVersion: number; result: unknown } }) => {
+            stored = {
+              logicVersion: args.create.logicVersion,
+              result: args.create.result,
+            };
+            return Promise.resolve({});
+          },
+        ),
+      },
+    };
+    // 끝난 세션 → 저장 트리거
+    const mockClient = { isSessionFinal: jest.fn().mockResolvedValue(true) };
+
     const mod: TestingModule = await Test.createTestingModule({
       providers: [
         PositionsService,
         { provide: PositionPipelineService, useValue: pipeline },
+        { provide: PrismaService, useValue: mockPrisma },
+        { provide: CachedOpenF1ClientService, useValue: mockClient },
       ],
     }).compile();
     service = mod.get(PositionsService);

@@ -1,6 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { RaceFlagsService } from './race-flags.service';
 import { CachedOpenF1ClientService } from '../../common/services/cached-openf1-client.service';
+import { PrismaService } from '../../common/prisma/prisma.service';
+import { RACE_FLAGS_LOGIC_VERSION } from '../../common/constants/logic-version';
 import {
   OpenF1RaceControl,
   OpenF1Session,
@@ -55,6 +57,9 @@ const makeRcMsg = (
 describe('RaceFlagsService', () => {
   let service: RaceFlagsService;
   let mockClient: jest.Mocked<CachedOpenF1ClientService>;
+  let mockPrisma: {
+    raceFlagsCache: { findUnique: jest.Mock; upsert: jest.Mock };
+  };
 
   beforeEach(async () => {
     mockClient = {
@@ -66,12 +71,23 @@ describe('RaceFlagsService', () => {
       fetchCarData: jest.fn(),
       fetchRaceControl: jest.fn(),
       preloadReplayData: jest.fn(),
+      // 끝난 세션이 아니라고 보아 영구 저장은 건너뜀 (계산 경로 검증)
+      isSessionFinal: jest.fn().mockResolvedValue(false),
     } as unknown as jest.Mocked<CachedOpenF1ClientService>;
+
+    // 가공 결과 캐시는 기본 miss → 매 호출 재계산 (계산 로직 검증)
+    mockPrisma = {
+      raceFlagsCache: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        upsert: jest.fn().mockResolvedValue({}),
+      },
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RaceFlagsService,
         { provide: CachedOpenF1ClientService, useValue: mockClient },
+        { provide: PrismaService, useValue: mockPrisma },
       ],
     }).compile();
 
@@ -269,16 +285,49 @@ describe('RaceFlagsService', () => {
     expect(result.lapFlags).toEqual([]);
   });
 
-  // ── 캐시 ──────────────────────────────────────────────────────────────────────
+  // ── 가공 결과 DB 캐시 ─────────────────────────────────────────────────────────
 
-  it('getRaceFlags: 같은 sessionKey로 두 번 호출하면 API는 한 번만 호출된다', async () => {
+  it('getRaceFlags: 캐시 hit(logic_version 일치) 시 OpenF1를 재호출하지 않고 저장된 결과를 반환한다', async () => {
+    const cached = {
+      sessionType: 'RACE',
+      totalLaps: 3,
+      lapFlags: ['NONE', 'NONE', 'NONE'],
+      totalMinutes: 0,
+      minuteFlags: [],
+    };
+    mockPrisma.raceFlagsCache.findUnique.mockResolvedValue({
+      logicVersion: RACE_FLAGS_LOGIC_VERSION,
+      result: cached,
+    });
+
+    const result = await service.getRaceFlags(SESSION_KEY);
+
+    expect(result).toEqual(cached);
+    expect(mockClient.fetchSessions).not.toHaveBeenCalled();
+  });
+
+  it('getRaceFlags: logic_version 불일치 시 캐시를 무시하고 재계산한다', async () => {
     mockClient.fetchSessions.mockResolvedValue([makeSession('Race')]);
     mockClient.fetchRaceControl.mockResolvedValue([]);
     mockClient.fetchLaps.mockResolvedValue(makeLaps(3));
+    mockPrisma.raceFlagsCache.findUnique.mockResolvedValue({
+      logicVersion: RACE_FLAGS_LOGIC_VERSION - 1, // 옛 버전 → miss 처리
+      result: { stale: true },
+    });
 
-    await service.getRaceFlags(SESSION_KEY);
     await service.getRaceFlags(SESSION_KEY);
 
     expect(mockClient.fetchSessions).toHaveBeenCalledTimes(1);
+  });
+
+  it('getRaceFlags: 끝난 세션이면 계산 결과를 DB에 저장한다', async () => {
+    mockClient.fetchSessions.mockResolvedValue([makeSession('Race')]);
+    mockClient.fetchRaceControl.mockResolvedValue([]);
+    mockClient.fetchLaps.mockResolvedValue(makeLaps(3));
+    mockClient.isSessionFinal.mockResolvedValue(true);
+
+    await service.getRaceFlags(SESSION_KEY);
+
+    expect(mockPrisma.raceFlagsCache.upsert).toHaveBeenCalledTimes(1);
   });
 });

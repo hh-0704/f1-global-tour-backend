@@ -1,4 +1,5 @@
 import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { CachedOpenF1ClientService } from './cached-openf1-client.service';
 
 /**
@@ -47,6 +48,60 @@ export abstract class BaseF1Service {
         HttpStatus.SERVICE_UNAVAILABLE,
       );
     }
+  }
+
+  /**
+   * 가공 결과(무거운 계산) 캐시 공통 흐름 (plan.md §6 logic_version 무효화).
+   *
+   * 1. load() 로 캐시 조회 — 저장된 logic_version === 코드 상수일 때만 hit (다르면 재계산).
+   * 2. miss 면 compute() 로 계산.
+   * 3. shouldPersist(결과) && 끝난 세션일 때만 save() 로 영구 저장 (규칙 ①·④ 정신).
+   *    진행 중 세션·빈 결과는 저장하지 않아 영구 결손/stale 방지.
+   * DB 장애는 경고 로그 후 계산 결과로 graceful degradation.
+   */
+  protected async getCachedComputed<T>(
+    sessionKey: number,
+    logicVersion: number,
+    load: () => Promise<{ logicVersion: number; payload: T } | null>,
+    compute: () => Promise<T>,
+    save: (payload: T) => Promise<unknown>,
+    shouldPersist: (payload: T) => boolean = () => true,
+  ): Promise<T> {
+    try {
+      const cached = await load();
+      if (cached && cached.logicVersion === logicVersion) {
+        return cached.payload;
+      }
+    } catch (e) {
+      this.logger.warn(
+        `가공 결과 캐시 조회 실패(session=${sessionKey}): ${this.errMsg(e)}`,
+      );
+    }
+
+    const result = await compute();
+
+    if (
+      shouldPersist(result) &&
+      (await this.cachedOpenf1Client.isSessionFinal(sessionKey))
+    ) {
+      try {
+        await save(result);
+      } catch (e) {
+        this.logger.warn(
+          `가공 결과 캐시 저장 실패(session=${sessionKey}): ${this.errMsg(e)}`,
+        );
+      }
+    }
+    return result;
+  }
+
+  /** jsonb 컬럼 저장용 캐스팅 (Prisma InputJsonValue). */
+  protected toJson(data: unknown): Prisma.InputJsonValue {
+    return data as Prisma.InputJsonValue;
+  }
+
+  protected errMsg(e: unknown): string {
+    return e instanceof Error ? e.message : String(e);
   }
 
   /**

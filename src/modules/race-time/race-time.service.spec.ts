@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { RaceTimeService } from './race-time.service';
 import { CachedOpenF1ClientService } from '../../common/services/cached-openf1-client.service';
+import { PrismaService } from '../../common/prisma/prisma.service';
 import { OpenF1Lap } from '../../common/interfaces/openf1.interface';
 
 // 최소 필드만 갖춘 랩 생성 헬퍼
@@ -25,14 +26,35 @@ function lap(
 
 describe('RaceTimeService', () => {
   let service: RaceTimeService;
-  let client: { fetchLaps: jest.Mock };
+  let client: { fetchLaps: jest.Mock; isSessionFinal: jest.Mock };
+  let storedMs: bigint | null;
 
   beforeEach(async () => {
-    client = { fetchLaps: jest.fn() };
+    client = {
+      fetchLaps: jest.fn(),
+      // 끝난 세션 → raceStart 저장 트리거
+      isSessionFinal: jest.fn().mockResolvedValue(true),
+    };
+    storedMs = null;
+
+    // race_start_cache 를 인메모리로 흉내: upsert 시 저장, findUnique 시 반환
+    const mockPrisma = {
+      raceStartCache: {
+        findUnique: jest.fn(() =>
+          Promise.resolve(storedMs == null ? null : { raceStartMs: storedMs }),
+        ),
+        upsert: jest.fn((args: { create: { raceStartMs: bigint } }) => {
+          storedMs = args.create.raceStartMs;
+          return Promise.resolve({});
+        }),
+      },
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RaceTimeService,
         { provide: CachedOpenF1ClientService, useValue: client },
+        { provide: PrismaService, useValue: mockPrisma },
       ],
     }).compile();
     service = module.get(RaceTimeService);

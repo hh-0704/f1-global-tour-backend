@@ -29,15 +29,18 @@ Swagger UI is available at `http://localhost:4000/api/docs` in dev.
 
 ### Active Modules
 
-`SessionsModule`, `LapsModule`, `HealthModule` are registered in `AppModule`. Other modules (drivers, intervals, car-data, race-control, stints) have been removed.
+`PrismaModule` (global), `CommonModule`, `SessionsModule`, `LapsModule`, `HealthModule`, `TelemetryModule`, `PositionsModule` are registered in `AppModule`. `PositionsModule` pulls in `CalibrationModule` and `RaceTimeModule`. Other modules (drivers, intervals, car-data, race-control, stints) have been removed.
 
 ### Request Flow
 
 ```
-Controller → Service → CachedOpenF1ClientService → OpenF1ClientService → CircuitBreakerService → axios
+Controller → Service → CachedOpenF1ClientService → (RDB hit?) → OpenF1ClientService → CircuitBreakerService → axios
+                                                  ↘ (miss) fetch → persist to Postgres (finished sessions only)
 ```
 
-**Important**: `CachedOpenF1ClientService` is currently a pass-through wrapper — it does **not** cache to Redis. The name is aspirational. The only actual caching is an in-memory `Map` in `SessionsService` and `RaceFlagsService` (10-min TTL each).
+**Important**: `CachedOpenF1ClientService` is now a **real persistent cache layer** backed by Postgres/Prisma (plan.md 1단계). For raw data (`laps/intervals/drivers/stints/race_control`) it does RDB-lookup → on miss calls OpenF1 → stores back. Key rules: ① empty `[]`/error results are never persisted (circuit-breaker fallback `[]` must not become a permanent gap); ② always store/lookup the whole `session_key`, apply `driver_number`/`lap_number` filters in memory; ④ persist only **finished sessions** (`date_end < now`, via `ensureSessionMeta`/`isSessionFinal`). `fetchSessions` (list) stays uncached (direct). DB failures degrade gracefully (warn + fall back to OpenF1).
+
+Computed results (`driver_timings`, `race_flags`, `positions`, `raceStart`) are persisted in their own cache tables with a `logic_version` column — `BaseF1Service.getCachedComputed` invalidates on version mismatch and persists only finished sessions with non-empty results. Logic versions live in `src/common/constants/logic-version.ts`. The old in-memory `Map` caches were removed. `/location` is cached per `(session_key, driver_number)` in `openf1_location`. Redis hot-cache is plan.md 2단계 (not yet implemented).
 
 ### Core Endpoint: `GET /api/v1/sessions/:sessionKey/driver-timings`
 
@@ -99,5 +102,7 @@ POST /api/v1/health/circuit-breaker/reset           # Manual reset
 1. Create `src/modules/{name}/{name}.module.ts`, `.controller.ts`, `.service.ts`
 2. Service should extend `BaseF1Service`; inject `CachedOpenF1ClientService`
 3. Add query params interface to `common/interfaces/query-params.interface.ts`
-4. Add fetch method to `OpenF1ClientService` (and corresponding pass-through in `CachedOpenF1ClientService`)
+4. Add fetch method to `OpenF1ClientService`, then a cache-fallback wrapper in `CachedOpenF1ClientService` (follow the `cachedSessionRaw` pattern: RDB lookup → OpenF1 → persist finished sessions, never persist `[]`)
 5. Register module in `AppModule`
+
+Also: the API list above predates the positions work — `GET /api/v1/sessions/:sessionKey/positions` and `POST /api/v1/sessions/:sessionKey/start-replay` (now also synchronously precomputes `driver_timings` frames + background positions prewarming) are active.

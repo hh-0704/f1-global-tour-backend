@@ -175,28 +175,28 @@ race_start_cache  (session_key PK, race_start_ms bigint, computed_at)   -- 또�
 
 ## 7. 작업 단계 (Tasks)
 
-### 1단계 — RDB 영구 저장 (429 해결 핵심)
-- [ ] 의존성 추가: `prisma`(dev), `@prisma/client`
-- [ ] `docker-compose.yml` 작성 (로컬 Postgres)
-- [ ] `.env.example` 갱신 (`DATABASE_URL` 등)
-- [ ] `prisma/schema.prisma` 작성 (위 스키마, jsonb 통째 + logic_version)
-- [ ] `prisma migrate dev` 로 초기 마이그레이션 생성
-- [ ] `PrismaModule` / `PrismaService` 작성 (NestJS 연동, onModuleInit connect)
-- [ ] `package.json` scripts 보강: `postinstall: prisma generate`, build 전 generate (규칙 ⑤)
-- [ ] Repository(또는 Prisma 직접 호출) 레이어: 저장/조회
-- [ ] `CachedOpenF1ClientService`를 **진짜 캐시 레이어로 승격** (원본 한정, 규칙 ③)
-      → `fetchLaps/Intervals/Drivers/Stints/RaceControl`에 "RDB 조회 → 없으면 OpenF1 호출 후 RDB 저장" 폴백
-      → **빈 결과 `[]` 는 저장 금지** (규칙 ①)
-      → 저장은 session_key 전체 단위, `lapNumber` 등 필터는 메모리 적용 (규칙 ②)
+### 1단계 — RDB 영구 저장 (429 해결 핵심) ✅ 완료
+- [x] 의존성 추가: `prisma`(dev), `@prisma/client` (Prisma 7 → driver-adapter 요구로 **6.x 채택**)
+- [x] `docker-compose.yml` 작성 (로컬 Postgres 16)
+- [x] `.env.example` 갱신 (`DATABASE_URL` 등) — 기존 placeholder 유지, `.env` 생성
+- [x] `prisma/schema.prisma` 작성 (위 스키마, jsonb 통째 + logic_version)
+- [x] `prisma migrate dev` 로 초기 마이그레이션 생성 (`20260603123716_init`)
+- [x] `PrismaModule`(@Global) / `PrismaService` 작성 (onModuleInit connect)
+- [x] `package.json` scripts 보강: `postinstall: prisma generate`, build 전 generate (규칙 ⑤)
+- [x] Prisma 직접 호출 레이어: 저장/조회 (`CachedOpenF1ClientService` 내부)
+- [x] `CachedOpenF1ClientService`를 **진짜 캐시 레이어로 승격** (원본 한정, 규칙 ③)
+      → `fetchLaps/Intervals/Drivers/Stints/RaceControl` RDB 폴백 (`cachedSessionRaw` 헬퍼)
+      → **빈 결과 `[]` 저장 금지** (규칙 ①) / session_key 전체 저장·필터는 메모리 (규칙 ②)
       → `fetchSessions`(목록)는 캐싱 제외 (직통 유지)
-- [ ] "끝난 세션" 가드: 세션 메타 먼저 확보 후 `date_end < now()` 일 때만 영구 저장 (규칙 ④)
-- [ ] `driver_timings` / `race_flags` 가공 결과 DB 저장 연동 — `SessionsService`/`RaceFlagsService` 수정, `logic_version` 체크 포함 (규칙 ③)
-- [ ] 기존 인메모리 `framesCache` Map / RaceFlags 캐시 제거 → DB로 대체
-- [ ] 워밍업 엔드포인트(`POST /start-replay`) 강화: **동기**로 원본+프레임 계산·저장
-      (참고: positions 프리워밍은 이미 백그라운드 호출 연결됨 — §6.6)
-- [ ] **positions/location 통합 (§6.6)**: `fetchLocation` location raw 캐싱(드라이버 단위·빈결과 가드),
-      `positions_cache`+`PositionsService` RDB/Redis 연동(`POSITIONS_LOGIC_VERSION`), `raceStart` 캐시
-- [ ] 테스트: `PrismaService` mock 주입, 캐시 레이어 hit/miss·빈결과 가드 테스트 추가 (규칙 ⑤)
+- [x] "끝난 세션" 가드: `ensureSessionMeta`/`isSessionFinal` → `date_end < now` 일 때만 저장 (규칙 ④)
+- [x] `driver_timings` / `race_flags` 가공 결과 DB 저장 연동 — `BaseF1Service.getCachedComputed`,
+      `logic_version` 체크 (`src/common/constants/logic-version.ts`)
+- [x] 기존 인메모리 `framesCache` / RaceFlags / Positions / RaceTime Map 제거 → DB로 대체
+- [x] 워밍업(`POST /start-replay`) 강화: **동기**로 원본 + `driver_timings` 프레임 계산·저장
+      (positions 프리워밍은 백그라운드 — §6.6)
+- [x] **positions/location 통합 (§6.6)**: `fetchLocation` 드라이버 단위 캐싱(빈결과 가드),
+      `positions_cache`+`PositionsService`, `race_start_cache`+`RaceTimeService` (`POSITIONS_LOGIC_VERSION`)
+- [x] 테스트: `PrismaService` mock 주입, 캐시 레이어 hit/miss·빈결과·끝난세션·메모리필터 테스트 (규칙 ⑤)
 
 ### 2단계 — Redis 핫 캐시
 - [ ] 의존성 추가: `@nestjs/cache-manager`, redis store

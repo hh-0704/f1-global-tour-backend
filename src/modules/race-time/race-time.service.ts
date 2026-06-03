@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { CachedOpenF1ClientService } from '../../common/services/cached-openf1-client.service';
+import { PrismaService } from '../../common/prisma/prisma.service';
 import { OpenF1Lap } from '../../common/interfaces/openf1.interface';
 
 /**
@@ -13,31 +14,61 @@ import { OpenF1Lap } from '../../common/interfaces/openf1.interface';
  *   2) 10초 이내를 한 클러스터로 묶어 **가장 큰 클러스터의 최솟값** = raceStartMs.
  *      (레드플래그로 일부 드라이버가 lap1 을 재시작해도 다수결로 실제 출발 시각 확보.)
  *
- * 캐시: 과거 레이스의 raceStartMs 는 불변 → 인메모리 Map 영구 캐시
- *       (SessionsService.framesCache 와 동일 패턴. plan.md RDB+Redis 도입 시 `raceStart:{sk}` 로 이관).
+ * 캐시: 과거 레이스의 raceStartMs 는 불변 → race_start_cache(BigInt) 영구 캐시(plan.md §6.6).
+ *       끝난 세션·유효값(>0)만 저장.
  */
 @Injectable()
 export class RaceTimeService {
   private readonly logger = new Logger(RaceTimeService.name);
   private static readonly CLUSTER_THRESHOLD_MS = 10000; // 10초
-  private readonly cache = new Map<number, number>();
 
-  constructor(private readonly openf1: CachedOpenF1ClientService) {}
+  constructor(
+    private readonly openf1: CachedOpenF1ClientService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   /** 레이스 시작 절대 epoch ms. 유효 랩이 없으면 0. */
   async getRaceStartMs(sessionKey: number): Promise<number> {
-    const cached = this.cache.get(sessionKey);
-    if (cached !== undefined) return cached;
+    // 1. RDB 조회
+    try {
+      const row = await this.prisma.raceStartCache.findUnique({
+        where: { sessionKey },
+      });
+      if (row) return Number(row.raceStartMs);
+    } catch (e) {
+      this.logger.warn(
+        `raceStart 캐시 조회 실패(session=${sessionKey}): ${this.errMsg(e)}`,
+      );
+    }
 
     const laps = await this.openf1.fetchLaps({ session_key: sessionKey });
     const raceStartMs = this.computeRaceStartMs(laps);
-    this.cache.set(sessionKey, raceStartMs);
+
+    // 2. 유효값(>0) + 끝난 세션만 영구 저장
+    if (raceStartMs > 0 && (await this.openf1.isSessionFinal(sessionKey))) {
+      try {
+        await this.prisma.raceStartCache.upsert({
+          where: { sessionKey },
+          create: { sessionKey, raceStartMs: BigInt(raceStartMs) },
+          update: { raceStartMs: BigInt(raceStartMs), computedAt: new Date() },
+        });
+      } catch (e) {
+        this.logger.warn(
+          `raceStart 캐시 저장 실패(session=${sessionKey}): ${this.errMsg(e)}`,
+        );
+      }
+    }
+
     this.logger.debug(
       `raceStartMs(session=${sessionKey}) = ${raceStartMs} (${
         raceStartMs ? new Date(raceStartMs).toISOString() : 'n/a'
       })`,
     );
     return raceStartMs;
+  }
+
+  private errMsg(e: unknown): string {
+    return e instanceof Error ? e.message : String(e);
   }
 
   /** dateIso 를 raceStartMs 기준 상대 초로. (pre-start 면 음수) */

@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { BaseF1Service } from '../../common/services/base-f1.service';
 import { CachedOpenF1ClientService } from '../../common/services/cached-openf1-client.service';
+import { PrismaService } from '../../common/prisma/prisma.service';
+import { DRIVER_TIMINGS_LOGIC_VERSION } from '../../common/constants/logic-version';
 import { PositionsService } from '../positions/positions.service';
 import {
   SessionsQueryParams,
@@ -67,15 +69,9 @@ const WINDOW_MS = 2000;
 
 @Injectable()
 export class SessionsService extends BaseF1Service {
-  // Redis 없이도 반복 호출을 방지하는 인메모리 frames 캐시
-  private readonly framesCache = new Map<
-    number,
-    { frames: DriverDisplayFrame[]; cachedAt: number }
-  >();
-  private readonly FRAMES_CACHE_TTL_MS = 10 * 60 * 1000; // 10분
-
   constructor(
     cachedOpenf1Client: CachedOpenF1ClientService,
+    private readonly prisma: PrismaService,
     // @Optional: 테스트 등 PositionsModule 미주입 컨텍스트에서는 프리워밍을 건너뛴다.
     @Optional() private readonly positionsService?: PositionsService,
   ) {
@@ -120,44 +116,70 @@ export class SessionsService extends BaseF1Service {
 
   async getDriverTimings(sessionKey: number): Promise<DriverTimingsResponse> {
     return this.executeWithErrorHandling(
-      async () => {
-        // 인메모리 캐시 확인 (Redis 미연결 상태에서도 중복 계산 방지)
-        const cached = this.framesCache.get(sessionKey);
-        if (cached && Date.now() - cached.cachedAt < this.FRAMES_CACHE_TTL_MS) {
-          return { frames: cached.frames };
-        }
-
-        // 세션 타입 확인: 연습주행(Practice)은 리플레이 미지원
-        await this.validateReplayableSession(sessionKey);
-
-        // 순차 호출: Promise.all은 4개 동시 요청으로 OpenF1 429 유발
-        const laps = await this.cachedOpenf1Client.fetchLaps({
-          session_key: sessionKey,
-        });
-        const intervals = await this.cachedOpenf1Client.fetchIntervals({
-          session_key: sessionKey,
-        });
-        const drivers = await this.cachedOpenf1Client.fetchDrivers({
-          session_key: sessionKey,
-        });
-        const stints = await this.cachedOpenf1Client.fetchStints({
-          session_key: sessionKey,
-        } as StintsQueryParams);
-
-        if (laps.length === 0) return { frames: [] };
-
-        const frames = this.buildDisplayFrames(
-          laps,
-          intervals,
-          drivers,
-          stints,
-        );
-        this.framesCache.set(sessionKey, { frames, cachedAt: Date.now() });
-        return { frames };
-      },
+      () =>
+        this.getCachedComputed<DriverTimingsResponse>(
+          sessionKey,
+          DRIVER_TIMINGS_LOGIC_VERSION,
+          async () => {
+            const row = await this.prisma.driverTimingsCache.findUnique({
+              where: { sessionKey },
+            });
+            return row
+              ? {
+                  logicVersion: row.logicVersion,
+                  payload: {
+                    frames: row.frames as unknown as DriverDisplayFrame[],
+                  },
+                }
+              : null;
+          },
+          () => this.computeDriverTimings(sessionKey),
+          (payload) =>
+            this.prisma.driverTimingsCache.upsert({
+              where: { sessionKey },
+              create: {
+                sessionKey,
+                frames: this.toJson(payload.frames),
+                logicVersion: DRIVER_TIMINGS_LOGIC_VERSION,
+              },
+              update: {
+                frames: this.toJson(payload.frames),
+                logicVersion: DRIVER_TIMINGS_LOGIC_VERSION,
+                computedAt: new Date(),
+              },
+            }),
+          // 의미있는 프레임만 저장 — 빈 결과(데이터 없음/일시 실패)는 영구화하지 않음
+          (payload) => payload.frames.length > 0,
+        ),
       'get driver timings',
       { sessionKey },
     );
+  }
+
+  private async computeDriverTimings(
+    sessionKey: number,
+  ): Promise<DriverTimingsResponse> {
+    // 세션 타입 확인: 연습주행(Practice)은 리플레이 미지원
+    await this.validateReplayableSession(sessionKey);
+
+    // 순차 호출: Promise.all은 4개 동시 요청으로 OpenF1 429 유발
+    const laps = await this.cachedOpenf1Client.fetchLaps({
+      session_key: sessionKey,
+    });
+    const intervals = await this.cachedOpenf1Client.fetchIntervals({
+      session_key: sessionKey,
+    });
+    const drivers = await this.cachedOpenf1Client.fetchDrivers({
+      session_key: sessionKey,
+    });
+    const stints = await this.cachedOpenf1Client.fetchStints({
+      session_key: sessionKey,
+    } as StintsQueryParams);
+
+    if (laps.length === 0) return { frames: [] };
+
+    const frames = this.buildDisplayFrames(laps, intervals, drivers, stints);
+    return { frames };
   }
 
   // 표시용 완전 병합 프레임 배열 생성 (핵심 메서드)
@@ -563,6 +585,20 @@ export class SessionsService extends BaseF1Service {
         const replayData =
           await this.cachedOpenf1Client.preloadReplayData(sessionKey);
 
+        // driver_timings 프레임을 동기로 계산·저장 (끝난 세션이면 DB 영구화).
+        // 원본은 위에서 캐싱됐으므로 추가 OpenF1 호출 없이 계산. 리플레이 미지원(Practice 등)은 건너뜀.
+        let framesCount = 0;
+        try {
+          const timings = await this.getDriverTimings(sessionKey);
+          framesCount = timings.frames.length;
+        } catch (err) {
+          this.logger.warn(
+            `driver_timings 프리계산 건너뜀(session=${sessionKey}): ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
+        }
+
         // positions 캐시 프리워밍: 백그라운드로 미리 빌드(응답 차단 안 함).
         // 드라이버별 /location 순차 수집이라 무거움 → 최초 1회 사전계산해 첫 positions 요청을 빠르게.
         // 캘리브 없는 서킷(404)·수집 실패는 무시(프리워밍은 best-effort).
@@ -591,6 +627,7 @@ export class SessionsService extends BaseF1Service {
             lapsCount: replayData.laps.length,
             intervalsCount: replayData.intervals.length,
             stintsCount: replayData.stints.length,
+            framesCount,
           },
           drivers: drivers,
         });

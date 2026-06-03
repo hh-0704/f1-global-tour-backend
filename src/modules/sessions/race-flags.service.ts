@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { BaseF1Service } from '../../common/services/base-f1.service';
 import { CachedOpenF1ClientService } from '../../common/services/cached-openf1-client.service';
+import { PrismaService } from '../../common/prisma/prisma.service';
+import { RACE_FLAGS_LOGIC_VERSION } from '../../common/constants/logic-version';
 import { OpenF1RaceControl } from '../../common/interfaces/openf1.interface';
 import type {
   FlagStatus,
@@ -11,77 +13,96 @@ import type {
 
 @Injectable()
 export class RaceFlagsService extends BaseF1Service {
-  private readonly flagsCache = new Map<
-    number,
-    { data: RaceFlagsResponse; cachedAt: number }
-  >();
-  private readonly CACHE_TTL_MS = 10 * 60 * 1000; // 10분
-
-  constructor(cachedOpenf1Client: CachedOpenF1ClientService) {
+  constructor(
+    cachedOpenf1Client: CachedOpenF1ClientService,
+    private readonly prisma: PrismaService,
+  ) {
     super(cachedOpenf1Client);
   }
 
   async getRaceFlags(sessionKey: number): Promise<RaceFlagsResponse> {
     return this.executeWithErrorHandling(
-      async () => {
-        const cached = this.flagsCache.get(sessionKey);
-        if (cached && Date.now() - cached.cachedAt < this.CACHE_TTL_MS) {
-          return cached.data;
-        }
-
-        // 순차 호출
-        const sessions = await this.cachedOpenf1Client.fetchSessions({
-          session_key: sessionKey,
-        });
-        const raceControl = await this.cachedOpenf1Client.fetchRaceControl({
-          session_key: sessionKey,
-        });
-        const laps = await this.cachedOpenf1Client.fetchLaps({
-          session_key: sessionKey,
-        });
-
-        const session = sessions[0];
-        const sessionType = this.mapSessionType(
-          session?.session_type ?? 'Race',
-        );
-
-        const totalLaps =
-          laps.length > 0
-            ? Math.max(
-                ...laps
-                  .map((l) => l.lap_number)
-                  .filter((n) => Number.isFinite(n)),
-              )
-            : 0;
-        const lapFlags = this.buildLapFlags(raceControl, totalLaps);
-
-        let totalMinutes = 0;
-        let minuteFlags: LapFlagStatus[] = [];
-
-        if (sessionType !== 'RACE' && session) {
-          const startMs = new Date(session.date_start).getTime();
-          const endMs = new Date(session.date_end).getTime();
-          totalMinutes = Math.ceil((endMs - startMs) / 60000);
-          minuteFlags = this.buildMinuteFlags(
-            raceControl,
-            startMs,
-            totalMinutes,
-          );
-        }
-
-        const data: RaceFlagsResponse = {
-          sessionType,
-          totalLaps,
-          lapFlags,
-          totalMinutes,
-          minuteFlags,
-        };
-        this.flagsCache.set(sessionKey, { data, cachedAt: Date.now() });
-        return data;
-      },
+      () =>
+        this.getCachedComputed<RaceFlagsResponse>(
+          sessionKey,
+          RACE_FLAGS_LOGIC_VERSION,
+          async () => {
+            const row = await this.prisma.raceFlagsCache.findUnique({
+              where: { sessionKey },
+            });
+            return row
+              ? {
+                  logicVersion: row.logicVersion,
+                  payload: row.result as unknown as RaceFlagsResponse,
+                }
+              : null;
+          },
+          () => this.computeRaceFlags(sessionKey),
+          (payload) =>
+            this.prisma.raceFlagsCache.upsert({
+              where: { sessionKey },
+              create: {
+                sessionKey,
+                result: this.toJson(payload),
+                logicVersion: RACE_FLAGS_LOGIC_VERSION,
+              },
+              update: {
+                result: this.toJson(payload),
+                logicVersion: RACE_FLAGS_LOGIC_VERSION,
+                computedAt: new Date(),
+              },
+            }),
+          // 의미있는 결과만 저장 — 빈 플래그(데이터 없음/일시 실패)는 영구화하지 않음
+          (payload) =>
+            payload.lapFlags.length > 0 || payload.minuteFlags.length > 0,
+        ),
       'get race flags',
       { sessionKey },
     );
+  }
+
+  private async computeRaceFlags(
+    sessionKey: number,
+  ): Promise<RaceFlagsResponse> {
+    // 순차 호출 (원본은 CachedOpenF1ClientService 가 RDB 캐싱)
+    const sessions = await this.cachedOpenf1Client.fetchSessions({
+      session_key: sessionKey,
+    });
+    const raceControl = await this.cachedOpenf1Client.fetchRaceControl({
+      session_key: sessionKey,
+    });
+    const laps = await this.cachedOpenf1Client.fetchLaps({
+      session_key: sessionKey,
+    });
+
+    const session = sessions[0];
+    const sessionType = this.mapSessionType(session?.session_type ?? 'Race');
+
+    const totalLaps =
+      laps.length > 0
+        ? Math.max(
+            ...laps.map((l) => l.lap_number).filter((n) => Number.isFinite(n)),
+          )
+        : 0;
+    const lapFlags = this.buildLapFlags(raceControl, totalLaps);
+
+    let totalMinutes = 0;
+    let minuteFlags: LapFlagStatus[] = [];
+
+    if (sessionType !== 'RACE' && session) {
+      const startMs = new Date(session.date_start).getTime();
+      const endMs = new Date(session.date_end).getTime();
+      totalMinutes = Math.ceil((endMs - startMs) / 60000);
+      minuteFlags = this.buildMinuteFlags(raceControl, startMs, totalMinutes);
+    }
+
+    return {
+      sessionType,
+      totalLaps,
+      lapFlags,
+      totalMinutes,
+      minuteFlags,
+    };
   }
 
   private mapSessionType(openF1Type: string): FrontendSessionType {

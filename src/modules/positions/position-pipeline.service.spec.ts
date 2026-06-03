@@ -6,6 +6,7 @@ import { join } from 'path';
 import { PositionPipelineService } from './position-pipeline.service';
 import { PositionsResponse } from './interfaces/positions.interface';
 import { CachedOpenF1ClientService } from '../../common/services/cached-openf1-client.service';
+import { PrismaService } from '../../common/prisma/prisma.service';
 import { RaceTimeService } from '../race-time/race-time.service';
 import { CoordinateService } from '../calibration/coordinate.service';
 import { RoadSnapService } from '../calibration/road-snap.service';
@@ -51,6 +52,7 @@ interface MockClient {
   fetchDrivers: jest.Mock;
   fetchLocation: jest.Mock;
   fetchLaps: jest.Mock;
+  isSessionFinal: jest.Mock;
 }
 
 async function buildModule(client: MockClient): Promise<TestingModule> {
@@ -62,6 +64,15 @@ async function buildModule(client: MockClient): Promise<TestingModule> {
       TrackGeometryService,
       RoadSnapService,
       { provide: CachedOpenF1ClientService, useValue: client },
+      {
+        provide: PrismaService,
+        useValue: {
+          raceStartCache: {
+            findUnique: jest.fn().mockResolvedValue(null),
+            upsert: jest.fn().mockResolvedValue({}),
+          },
+        },
+      },
       {
         provide: ConfigService,
         useValue: { get: jest.fn().mockReturnValue(4) },
@@ -95,6 +106,7 @@ function mockClientFor(
     ]),
     fetchDrivers: jest.fn().mockResolvedValue([{ driver_number: driver }]),
     fetchLocation: jest.fn().mockResolvedValue(locations),
+    isSessionFinal: jest.fn().mockResolvedValue(false),
   };
 }
 

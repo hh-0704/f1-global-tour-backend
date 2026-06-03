@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { PrismaModule } from './common/prisma/prisma.module';
 import { CommonModule } from './common/common.module';
 import { SessionsModule } from './modules/sessions/sessions.module';
 import { LapsModule } from './modules/laps/laps.module';
@@ -18,6 +19,7 @@ import configuration from './config/configuration';
       isGlobal: true,
       load: [configuration],
     }),
+    PrismaModule,
     CommonModule,
     SessionsModule,
     LapsModule,

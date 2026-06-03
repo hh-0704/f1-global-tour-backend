@@ -1,0 +1,24 @@
+# 로컬 개발용 인프라. plan.md 1단계는 Postgres만, 2단계에서 Redis 추가 예정.
+# 자격증명은 .env.example 의 DATABASE_URL(postgresql://user:password@localhost:5432/f1db)과 일치시킨다.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: f1-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: f1db
+    ports:
+      - '5432:5432'
+    volumes:
+      - f1-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # 마이그레이션/앱 기동 전에 DB 준비 완료를 보장
+      test: ['CMD-SHELL', 'pg_isready -U user -d f1db']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  f1-postgres-data:

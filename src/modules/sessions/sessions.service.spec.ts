@@ -2,6 +2,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SessionsService } from './sessions.service';
 import { CachedOpenF1ClientService } from '../../common/services/cached-openf1-client.service';
+import { PrismaService } from '../../common/prisma/prisma.service';
+import { DRIVER_TIMINGS_LOGIC_VERSION } from '../../common/constants/logic-version';
 import { PositionsService } from '../positions/positions.service';
 import {
   OpenF1Driver,
@@ -291,6 +293,9 @@ function setupDefaultMocks(mockClient: jest.Mocked<CachedOpenF1ClientService>) {
 describe('SessionsService', () => {
   let service: SessionsService;
   let mockClient: jest.Mocked<CachedOpenF1ClientService>;
+  let mockPrisma: {
+    driverTimingsCache: { findUnique: jest.Mock; upsert: jest.Mock };
+  };
 
   beforeEach(async () => {
     mockClient = {
@@ -302,12 +307,23 @@ describe('SessionsService', () => {
       fetchCarData: jest.fn(),
       fetchRaceControl: jest.fn(),
       preloadReplayData: jest.fn(),
+      // 끝난 세션이 아니라고 보아 영구 저장은 건너뜀 (계산 경로 검증)
+      isSessionFinal: jest.fn().mockResolvedValue(false),
     } as any;
+
+    // 가공 결과 캐시는 기본 miss → 매 호출 재계산 (계산 로직 검증)
+    mockPrisma = {
+      driverTimingsCache: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        upsert: jest.fn().mockResolvedValue({}),
+      },
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SessionsService,
         { provide: CachedOpenF1ClientService, useValue: mockClient },
+        { provide: PrismaService, useValue: mockPrisma },
       ],
     }).compile();
 
@@ -601,14 +617,40 @@ describe('SessionsService', () => {
     expect(frames).toEqual([]);
   });
 
-  // ── 15. 인메모리 캐시 재사용 ─────────────────────────────────────────────────
-  it('getDriverTimings: 같은 sessionKey로 두 번 호출하면 OpenF1 API는 한 번만 호출된다', async () => {
+  // ── 15. 가공 결과 DB 캐시 ────────────────────────────────────────────────────
+  it('getDriverTimings: 캐시 hit(logic_version 일치) 시 OpenF1를 재호출하지 않고 저장된 프레임을 반환한다', async () => {
     setupDefaultMocks(mockClient);
+    const cachedFrames = [{ time: 0 }];
+    mockPrisma.driverTimingsCache.findUnique.mockResolvedValue({
+      logicVersion: DRIVER_TIMINGS_LOGIC_VERSION,
+      frames: cachedFrames,
+    });
 
-    await service.getDriverTimings(SESSION_KEY);
+    const { frames } = await service.getDriverTimings(SESSION_KEY);
+
+    expect(frames).toEqual(cachedFrames);
+    expect(mockClient.fetchLaps).not.toHaveBeenCalled();
+  });
+
+  it('getDriverTimings: logic_version 불일치 시 캐시를 무시하고 재계산한다', async () => {
+    setupDefaultMocks(mockClient);
+    mockPrisma.driverTimingsCache.findUnique.mockResolvedValue({
+      logicVersion: DRIVER_TIMINGS_LOGIC_VERSION - 1, // 옛 버전 → miss 처리
+      frames: [{ stale: true }],
+    });
+
     await service.getDriverTimings(SESSION_KEY);
 
     expect(mockClient.fetchLaps).toHaveBeenCalledTimes(1);
+  });
+
+  it('getDriverTimings: 끝난 세션이면 계산 결과를 DB에 저장한다', async () => {
+    setupDefaultMocks(mockClient);
+    mockClient.isSessionFinal.mockResolvedValue(true);
+
+    await service.getDriverTimings(SESSION_KEY);
+
+    expect(mockPrisma.driverTimingsCache.upsert).toHaveBeenCalledTimes(1);
   });
 
   // ── 16. Practice 세션 리플레이 차단 ─────────────────────────────────────────
@@ -758,8 +800,15 @@ describe('SessionsService — startReplay positions 프리워밍', () => {
         stints: STINTS,
       }),
     } as unknown as CachedOpenF1ClientService;
+    const prisma = {
+      driverTimingsCache: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        upsert: jest.fn().mockResolvedValue({}),
+      },
+    } as unknown as PrismaService;
     return new SessionsService(
       client,
+      prisma,
       positions as unknown as PositionsService,
     );
   }

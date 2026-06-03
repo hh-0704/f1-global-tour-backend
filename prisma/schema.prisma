@@ -1,0 +1,121 @@
+// OpenF1 직접 호출 → DB 영구 저장 전환 (plan.md §6, §6.6).
+// 과거 리플레이 전용 = 불변 데이터 → 세션당 OpenF1 호출 최초 1회, 이후 0회.
+//
+// 저장 형태: OpenF1 응답 배열을 session_key 단위로 jsonb 하나에 통째 저장(조회 단순).
+// 가공 결과 캐시는 logic_version 으로 무효화(코드 상수와 다르면 재계산).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────
+// (A) 원본 — OpenF1 raw 응답 (session_key 단위 묶음 jsonb, 불변)
+// ⚠ 빈 결과 `[]` 는 저장 금지(규칙 ①) — 저장은 서비스/캐시 레이어에서 가드.
+// ─────────────────────────────────────────────────────────────
+
+// 개별 세션 메타. 끝난 세션 가드(date_end < now)·is_final 판정에 사용.
+model Openf1Session {
+  sessionKey Int       @id @map("session_key")
+  raw        Json
+  dateEnd    DateTime? @map("date_end")
+  isFinal    Boolean   @default(false) @map("is_final")
+  fetchedAt  DateTime  @default(now()) @map("fetched_at")
+
+  @@map("openf1_sessions")
+}
+
+model Openf1Lap {
+  sessionKey Int      @id @map("session_key")
+  raw        Json
+  fetchedAt  DateTime @default(now()) @map("fetched_at")
+
+  @@map("openf1_laps")
+}
+
+model Openf1Interval {
+  sessionKey Int      @id @map("session_key")
+  raw        Json
+  fetchedAt  DateTime @default(now()) @map("fetched_at")
+
+  @@map("openf1_intervals")
+}
+
+model Openf1Driver {
+  sessionKey Int      @id @map("session_key")
+  raw        Json
+  fetchedAt  DateTime @default(now()) @map("fetched_at")
+
+  @@map("openf1_drivers")
+}
+
+model Openf1Stint {
+  sessionKey Int      @id @map("session_key")
+  raw        Json
+  fetchedAt  DateTime @default(now()) @map("fetched_at")
+
+  @@map("openf1_stints")
+}
+
+model Openf1RaceControl {
+  sessionKey Int      @id @map("session_key")
+  raw        Json
+  fetchedAt  DateTime @default(now()) @map("fetched_at")
+
+  @@map("openf1_race_control")
+}
+
+// /location 은 (세션, 드라이버)당 수만 행 → 드라이버 단위로 분할 저장(§6.6).
+model Openf1Location {
+  sessionKey   Int      @map("session_key")
+  driverNumber Int      @map("driver_number")
+  raw          Json
+  fetchedAt    DateTime @default(now()) @map("fetched_at")
+
+  @@id([sessionKey, driverNumber])
+  @@map("openf1_location")
+}
+
+// ─────────────────────────────────────────────────────────────
+// (B) 가공 결과 — 무거운 계산 결과 (재계산 방지, logic_version 무효화)
+// ─────────────────────────────────────────────────────────────
+
+model DriverTimingsCache {
+  sessionKey   Int      @id @map("session_key")
+  frames       Json
+  logicVersion Int      @map("logic_version")
+  computedAt   DateTime @default(now()) @map("computed_at")
+
+  @@map("driver_timings_cache")
+}
+
+model RaceFlagsCache {
+  sessionKey   Int      @id @map("session_key")
+  result       Json
+  logicVersion Int      @map("logic_version")
+  computedAt   DateTime @default(now()) @map("computed_at")
+
+  @@map("race_flags_cache")
+}
+
+model PositionsCache {
+  sessionKey   Int      @id @map("session_key")
+  result       Json
+  logicVersion Int      @map("logic_version")
+  computedAt   DateTime @default(now()) @map("computed_at")
+
+  @@map("positions_cache")
+}
+
+// 레이스 시작 절대 ms(불변, race-time 단일 기준). ms timestamp 는 Int 범위 초과 → BigInt.
+model RaceStartCache {
+  sessionKey  Int      @id @map("session_key")
+  raceStartMs BigInt   @map("race_start_ms")
+  computedAt  DateTime @default(now()) @map("computed_at")
+
+  @@map("race_start_cache")
+}
