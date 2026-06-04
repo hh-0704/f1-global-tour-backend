@@ -235,3 +235,52 @@ race_start_cache  (session_key PK, race_start_ms bigint, computed_at)   -- 또�
 - [ ] 429 에러 미발생
 - [ ] 기존 API 응답 형식 동일 (프론트 영향 없음)
 - [ ] 테스트 통과
+
+## 10. 로컬 실행 / 배포 가이드 (DB)
+
+### 10.1 로컬 DB 띄우기
+`docker-compose.yml` 에 Postgres 16 이 정의되어 있다(현재 compose 는 postgres 단일 서비스).
+
+```bash
+docker compose up -d        # postgres 백그라운드 기동 (5432)
+docker compose ps           # STATUS = healthy 확인
+docker compose down         # 컨테이너만 제거 (데이터 볼륨 유지)
+docker compose down -v      # 데이터 볼륨까지 삭제 (완전 초기화)
+```
+
+- 데이터는 **Docker 명명 볼륨 `f1-postgres-data`** 에 저장(컨테이너 삭제해도 유지). repo 안에는 없음.
+- 계정/DB 는 `user` / `password` / `f1db` 고정 → `.env` 의 `DATABASE_URL=postgresql://user:password@localhost:5432/f1db` 와 일치.
+
+### 10.2 DB 셋팅 (테이블 생성)
+스키마는 `prisma/schema.prisma`, 초기 마이그레이션 `20260603123716_init` 이 **git 에 커밋됨**. 셋팅 = 빈 DB 에 테이블 생성.
+
+```bash
+npx prisma migrate dev      # 마이그레이션 적용 + Prisma Client 생성 (최초 1회/초기화 후)
+npx prisma studio           # GUI 로 테이블·데이터 확인 (localhost:5555)
+npm run start:dev           # 서버 기동 (4000)
+```
+
+- 처음엔 모든 테이블이 **비어 있음**. 세션 조회/`POST /sessions/:sk/start-replay` 시 OpenF1 에서 받아와 DB 에 영구 저장(1단계 설계). 이후 OpenF1 재호출 없음.
+- `prisma generate` 는 `postinstall`·`build` 에 묶여 자동 실행.
+
+### 10.3 배포 시 "다운로드한 DB 데이터"는 함께 올라가지 않는다 ⚠️
+**코드 배포와 DB 는 완전히 별개.** 배포 산출물에는 **테이블 구조만** 들어가고 **데이터(캐시된 OpenF1 응답)는 안 들어간다.**
+
+| 항목 | 배포에 포함 | 비고 |
+|---|---|---|
+| 앱 코드 / `prisma/schema.prisma` | ✅ | 소스·스키마 정의 |
+| `prisma/migrations/` | ✅ | 테이블 **구조(빈 껍데기)** 정의. 데이터 아님 |
+| `.env` | ❌ | gitignore. 서버는 별도 환경변수로 주입 |
+| 캐시된 OpenF1 데이터(랩/포지션 등) | ❌ | **로컬 Postgres 볼륨에만** 존재. git·dist 어디에도 없음 |
+
+**서버 배포 흐름:**
+1. 서버에 **별도 Postgres** 준비(관리형 DB Railway/Supabase/RDS 또는 서버 docker).
+2. 서버 환경변수 `DATABASE_URL` 을 그 DB 로 설정.
+3. 배포 시 **`npx prisma migrate deploy`** 실행 → 빈 테이블 생성(프로덕션용, 프롬프트·리셋 없음. `migrate dev` 아님).
+4. 서버 DB 는 비어서 시작 → 요청이 오면 OpenF1 에서 받아와 **서버 DB 가 스스로 충전**(불변 데이터라 세션당 최초 1회). 데이터를 손으로 옮길 필요 없음.
+
+**(선택) 로컬 데이터를 서버로 미리 옮겨 워밍업 비용을 아끼려면** — 배포와 무관한 수동 작업:
+```bash
+docker compose exec postgres pg_dump -U user f1db > f1db.sql   # 로컬 덤프
+psql "<서버_DATABASE_URL>" < f1db.sql                          # 서버 DB 에 복원
+```
