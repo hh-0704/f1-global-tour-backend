@@ -9,6 +9,10 @@ import {
 import { LapsService } from './laps.service';
 import { ApiResponseDto } from '../../common/dto/api-response.dto';
 import { TransformedLap } from './interfaces/lap.interface';
+import {
+  ImmutableCache,
+  RAW_IMMUTABLE_MAX_AGE,
+} from '../../common/interceptors/immutable-cache.interceptor';
 
 @ApiTags('laps')
 @Controller('laps')
@@ -33,6 +37,8 @@ export class LapsController {
     description: '특정 랩 번호 필터',
   })
   @ApiResponse({ status: 200, description: '랩 데이터 반환 성공' })
+  // 원본 랩 데이터는 영구 불변 → 1년 immutable 캐시. ETag 가 driverNumber·lapNumber 쿼리까지 반영.
+  @ImmutableCache({ tag: 'laps', maxAge: RAW_IMMUTABLE_MAX_AGE })
   async getSessionLaps(
     @Param('sessionKey', ParseIntPipe) sessionKey: number,
     @Query('driverNumber', new ParseIntPipe({ optional: true }))

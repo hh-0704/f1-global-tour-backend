@@ -16,6 +16,14 @@ import {
 import { SessionsService } from './sessions.service';
 import { RaceFlagsService } from './race-flags.service';
 import { ApiResponseDto } from '../../common/dto/api-response.dto';
+import {
+  ImmutableCache,
+  RAW_IMMUTABLE_MAX_AGE,
+} from '../../common/interceptors/immutable-cache.interceptor';
+import {
+  DRIVER_TIMINGS_LOGIC_VERSION,
+  RACE_FLAGS_LOGIC_VERSION,
+} from '../../common/constants/logic-version';
 
 @ApiTags('sessions')
 @Controller('sessions')
@@ -83,6 +91,8 @@ export class SessionsController {
   })
   @ApiParam({ name: 'sessionKey', description: '세션 고유 식별자' })
   @ApiResponse({ status: 200, description: '드라이버 목록 반환 성공' })
+  // 원본 드라이버 정보는 영구 불변 → 끝난 세션이면 1년 immutable 캐시.
+  @ImmutableCache({ tag: 'drivers', maxAge: RAW_IMMUTABLE_MAX_AGE })
   async getSessionDrivers(
     @Param('sessionKey', ParseIntPipe) sessionKey: number,
   ) {
@@ -96,12 +106,17 @@ export class SessionsController {
     description: [
       '레이스 전체를 2초 단위로 분할한 DriverDisplayFrame[] 반환.',
       '각 프레임에는 순위, 인터벌, 랩타임, 미니섹터, 타이어 정보가 포함됩니다.',
-      '결과는 10분간 인메모리 캐시됩니다.',
-      '⚠️ OpenF1 API를 4회 순차 호출하므로 첫 요청 시 수십 초 소요될 수 있습니다.',
+      '결과는 DB에 영구 캐시되며, 끝난 세션은 HTTP immutable 캐시로 재요청이 서버에 도달하지 않습니다.',
+      '⚠️ 최초 요청 시 OpenF1 데이터로 프레임을 계산하므로 수십 초 소요될 수 있습니다(이후 캐시).',
     ].join(' '),
   })
   @ApiParam({ name: 'sessionKey', description: '세션 고유 식별자' })
   @ApiResponse({ status: 200, description: '리플레이 프레임 반환 성공' })
+  // 가공 결과: logic_version 을 ETag 에 포함 → 로직 변경 시 자연 무효화.
+  @ImmutableCache({
+    tag: 'driver-timings',
+    version: DRIVER_TIMINGS_LOGIC_VERSION,
+  })
   async getDriverTimings(
     @Param('sessionKey', ParseIntPipe) sessionKey: number,
   ) {
@@ -115,11 +130,12 @@ export class SessionsController {
     description: [
       'OpenF1 race_control 메시지를 기반으로 세션의 플래그 상태를 랩별/분별로 반환.',
       '레이스: lapFlags 배열, 퀄리파잉/연습: minuteFlags 배열.',
-      '결과는 10분간 인메모리 캐시됩니다.',
+      '결과는 DB에 영구 캐시되며, 끝난 세션은 HTTP immutable 캐시가 적용됩니다.',
     ].join(' '),
   })
   @ApiParam({ name: 'sessionKey', description: '세션 고유 식별자' })
   @ApiResponse({ status: 200, description: '플래그 정보 반환 성공' })
+  @ImmutableCache({ tag: 'race-flags', version: RACE_FLAGS_LOGIC_VERSION })
   async getRaceFlags(@Param('sessionKey', ParseIntPipe) sessionKey: number) {
     const data = await this.raceFlagsService.getRaceFlags(sessionKey);
     return ApiResponseDto.success(data);
@@ -129,7 +145,7 @@ export class SessionsController {
   @ApiOperation({
     summary: '리플레이 시작 (데이터 프리로드)',
     description:
-      'drivers/laps/intervals/stints를 OpenF1에서 미리 가져옵니다. 현재 Redis 캐시는 미연결 상태입니다.',
+      'drivers/laps/intervals/stints 원본과 driver-timings 프레임을 미리 계산해 DB에 영구 캐시합니다. positions는 백그라운드로 프리워밍합니다.',
   })
   @ApiParam({ name: 'sessionKey', description: '세션 고유 식별자' })
   @ApiResponse({ status: 200, description: '프리로드 완료' })

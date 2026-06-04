@@ -40,7 +40,9 @@ Controller → Service → CachedOpenF1ClientService → (RDB hit?) → OpenF1Cl
 
 **Important**: `CachedOpenF1ClientService` is now a **real persistent cache layer** backed by Postgres/Prisma (plan.md 1단계). For raw data (`laps/intervals/drivers/stints/race_control`) it does RDB-lookup → on miss calls OpenF1 → stores back. Key rules: ① empty `[]`/error results are never persisted (circuit-breaker fallback `[]` must not become a permanent gap); ② always store/lookup the whole `session_key`, apply `driver_number`/`lap_number` filters in memory; ④ persist only **finished sessions** (`date_end < now`, via `ensureSessionMeta`/`isSessionFinal`). `fetchSessions` (list) stays uncached (direct). DB failures degrade gracefully (warn + fall back to OpenF1).
 
-Computed results (`driver_timings`, `race_flags`, `positions`, `raceStart`) are persisted in their own cache tables with a `logic_version` column — `BaseF1Service.getCachedComputed` invalidates on version mismatch and persists only finished sessions with non-empty results. Logic versions live in `src/common/constants/logic-version.ts`. The old in-memory `Map` caches were removed. `/location` is cached per `(session_key, driver_number)` in `openf1_location`. Redis hot-cache is plan.md 2단계 (not yet implemented).
+Computed results (`driver_timings`, `race_flags`, `positions`, `raceStart`) are persisted in their own cache tables with a `logic_version` column — `BaseF1Service.getCachedComputed` invalidates on version mismatch and persists only finished sessions with non-empty results. Logic versions live in `src/common/constants/logic-version.ts`. The old in-memory `Map` caches were removed. `/location` is cached per `(session_key, driver_number)` in `openf1_location`.
+
+**HTTP immutable caching (plan.md 2단계)**: `ImmutableCacheInterceptor` (global `APP_INTERCEPTOR`) reads the `@ImmutableCache({ tag, version?, maxAge? })` decorator on read endpoints and, **only for finished sessions** (`isSessionFinal`), sets `Cache-Control: public, max-age, immutable` + a deterministic weak ETag `W/"{tag}-v{logic_version}-{originalUrl}"`. In-progress/unknown sessions get `no-store`. This makes browsers/CDNs serve replay re-views without hitting the server at all; logic-version in the ETag auto-invalidates on logic changes, and `originalUrl` keeps the laps `driverNumber/lapNumber` query variants distinct. Raw endpoints (`drivers`, `laps`) use a 1-year max-age; computed ones (`driver-timings`, `race-flags`, `positions`) use 1 day. Redis hot-cache was **deferred** (for immutable data the dominant cost is Node-side parse/stringify/gzip, identical for RDB vs Redis; revisit only if concurrent load pressures Postgres CPU).
 
 ### Core Endpoint: `GET /api/v1/sessions/:sessionKey/driver-timings`
 
@@ -51,7 +53,7 @@ This is the main heavy-computation endpoint. It:
 4. Each frame contains position-sorted `DriverDisplayRow[]` with interval gaps, lap times, mini-sector colours, and tire info
 5. `displayDataLap` logic: frames show the *previous completed lap's* timing data, not the current in-progress lap
 6. DNF drivers are re-sorted to the end of each frame with `position` re-assigned and `interval` set to `"DNF"`
-7. Results cached in `SessionsService.framesCache` (Map) for 10 minutes
+7. Results are persisted in `driver_timings_cache` (Postgres, `logic_version`) and served to clients with HTTP immutable caching for finished sessions (see HTTP immutable caching above)
 
 ### Race Flags: `GET /api/v1/sessions/:sessionKey/race-flags`
 

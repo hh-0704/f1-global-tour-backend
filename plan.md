@@ -198,12 +198,28 @@ race_start_cache  (session_key PK, race_start_ms bigint, computed_at)   -- 또�
       `positions_cache`+`PositionsService`, `race_start_cache`+`RaceTimeService` (`POSITIONS_LOGIC_VERSION`)
 - [x] 테스트: `PrismaService` mock 주입, 캐시 레이어 hit/miss·빈결과·끝난세션·메모리필터 테스트 (규칙 ⑤)
 
-### 2단계 — Redis 핫 캐시
-- [ ] 의존성 추가: `@nestjs/cache-manager`, redis store
-- [ ] `docker-compose.yml`에 Redis 추가
-- [ ] 캐시 레이어에 Redis "조회 → miss 시 RDB" 단계 삽입
-- [ ] 무거운 프레임 JSON Redis 적재 (적절한 TTL 또는 무기한)
-- [ ] 테스트
+### 2단계 — HTTP immutable 캐시 ✅ 완료 (Redis는 보류)
+
+> **결정 변경**: 당초 2단계는 "Redis 핫 캐시"였으나, 불변 데이터 특성을 재검토해 **HTTP immutable 캐시**로 전환.
+>
+> 근거: 무거운 엔드포인트(`driver-timings`/`positions`) 응답 1건의 비용은 ① 저장소 조회 → ② `JSON.parse` →
+> ③ 응답 `JSON.stringify` → ④ gzip 인데, **②③④는 RDB든 Redis든 동일**하고 Redis가 줄이는 건 ①뿐(수 MB에서 ~10–30ms).
+> 반면 불변 데이터에 가장 큰 레버리지는 **재시청·스크럽 시 요청이 서버에 아예 도달하지 않게** 하는 것 → `Cache-Control: immutable`.
+> 인프라 추가도 없다. Redis는 동시성 하 PG CPU 보호용으로 **나중에 필요해지면** 도입(아래 보류 항목).
+
+- [x] `ImmutableCacheInterceptor` + `@ImmutableCache({ tag, version?, maxAge? })` 데코레이터
+      (`src/common/interceptors/immutable-cache.interceptor.ts`), 전역 `APP_INTERCEPTOR` 등록.
+- [x] 끝난 세션(`isSessionFinal`)일 때만 `Cache-Control: public, max-age, immutable` + 결정적 ETag.
+      진행 중/미확정 세션은 `no-store`(불변 보장 불가).
+- [x] ETag = `W/"{tag}-v{logic_version}-{originalUrl}"` — logic_version 포함(로직 변경 시 자연 무효화),
+      URL 포함(laps 의 `driverNumber/lapNumber` 쿼리까지 고유). 본문 해시 없이 Express 조건부 GET(304) 활용.
+- [x] 적용: `drivers`(원본·1년), `laps`(원본·1년), `driver-timings`/`race-flags`/`positions`(가공·1일, logic_version).
+- [x] 테스트(`immutable-cache.interceptor.spec.ts`): 메타 없음 패스스루 / 끝난 세션 헤더·ETag / 미확정 no-store /
+      maxAge·쿼리 반영 ETag / sessionKey 없음 패스스루.
+
+#### 보류 — Redis 핫 캐시 (필요 시 재개)
+- [ ] 동시성/부하가 실제로 PG CPU를 압박하면 도입: 캐시 레이어(`cachedSessionRaw`/`getCachedComputed`) 앞단에
+      Redis 3단 폴백 삽입(`@Optional` 주입으로 graceful degradation). docker-compose Redis 추가.
 
 ## 8. 마이그레이션 리스크 / 주의
 
