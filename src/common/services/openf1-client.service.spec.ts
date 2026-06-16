@@ -35,6 +35,18 @@ function mock429Error(): AxiosError {
   return error;
 }
 
+function mock404Error(): AxiosError {
+  const error = new AxiosError('Not Found');
+  error.response = {
+    status: 404,
+    statusText: 'Not Found',
+    data: { detail: 'No results found.' },
+    headers: {},
+    config: { headers: {} } as InternalAxiosRequestConfig,
+  };
+  return error;
+}
+
 describe('OpenF1ClientService', () => {
   let service: OpenF1ClientService;
   let httpService: jest.Mocked<HttpService>;
@@ -189,7 +201,49 @@ describe('OpenF1ClientService', () => {
     expect(calledUrl).not.toContain('date%3E'); // 연산자가 인코딩되면 안 됨
   });
 
+  it('fetchLocation: 404 No results found 는 빈 배열로 처리한다(장애 아님)', async () => {
+    // OpenF1 은 매칭 데이터가 없으면 404 를 반환 — 503 이 아니라 [] 여야 한다.
+    httpService.get.mockReturnValue(throwError(() => mock404Error()));
+
+    const result = await service.fetchLocation({
+      session_key: 9472,
+      driver_number: 1,
+      dateGt: '2024-03-02T16:43:42Z',
+      dateLt: '2024-03-02T17:00:00Z',
+    });
+
+    expect(result).toEqual([]);
+    // 404 는 재시도 대상이 아니므로 단 1회만 호출
+    expect(httpService.get).toHaveBeenCalledTimes(1);
+  });
+
   // ── fetchLocationWindow ───────────────────────────────────────────────────────
+
+  it('fetchLocationWindow: 빈(404) 청크가 섞여도 중단 없이 나머지를 모은다', async () => {
+    // 레이스 종료 뒤 마지막 청크가 404(빈 결과)여도 앞선 청크 데이터는 보존돼야 한다.
+    httpService.get
+      .mockReturnValueOnce(
+        mockAxiosObservable([{ date: '2024-03-02T13:10:00Z' }]),
+      )
+      .mockReturnValueOnce(
+        mockAxiosObservable([{ date: '2024-03-02T13:30:00Z' }]),
+      )
+      .mockReturnValueOnce(throwError(() => mock404Error())); // 빈 tail 청크
+
+    const result = await service.fetchLocationWindow(
+      9472,
+      1,
+      '2024-03-02T13:00:00Z',
+      '2024-03-02T14:00:00Z',
+      20,
+    );
+
+    expect(httpService.get).toHaveBeenCalledTimes(3);
+    expect(result.map((r) => r.date)).toEqual([
+      '2024-03-02T13:10:00Z',
+      '2024-03-02T13:30:00Z',
+    ]);
+  });
 
   it('fetchLocationWindow: 윈도우가 없으면 단일 요청', async () => {
     const loc = [{ date: 'a', x: 1, y: 2 }];

@@ -30,6 +30,13 @@ export class OpenF1ClientService {
   private readonly logger = new Logger(OpenF1ClientService.name);
   private readonly baseUrl: string;
 
+  // /location 윈도우 청크 사이 최소 간격(ms) — rate limit 예방용
+  private static readonly LOCATION_CHUNK_DELAY_MS = 400;
+
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
   // 429 Rate Limit 시 재시도 (최대 3회, 지수 백오프)
   private async fetchWithRetry<T>(url: string, label: string): Promise<T> {
     const MAX_RETRIES = 3;
@@ -257,6 +264,14 @@ export class OpenF1ClientService {
         this.logger.debug(`Retrieved ${data.length} location points`);
         return data;
       } catch (error) {
+        // OpenF1 은 매칭 데이터가 없으면 404 "No results found." 를 반환한다.
+        // /location 윈도우 청크는 레이스 종료 뒤 빈 구간까지 요청하게 되므로,
+        // 이 404 는 장애가 아니라 정상적인 "빈 결과" → [] 로 처리해 전체 빌드 중단을 막는다.
+        // (빈 [] 는 상위 캐시 레이어가 저장하지 않으므로 영구 결손도 생기지 않는다.)
+        if (error instanceof AxiosError && error.response?.status === 404) {
+          this.logger.debug('location: 404 No results found → 빈 결과로 처리');
+          return [];
+        }
         this.logger.error(
           `OpenF1 API Error (location): ${(error as AxiosError).message}`,
         );
@@ -295,6 +310,9 @@ export class OpenF1ClientService {
 
     const byDate = new Map<string, OpenF1Location>();
     for (let i = 0; i < boundaries.length - 1; i++) {
+      // 청크 사이 간격: /location 연속 호출이 OpenF1 rate limit(429)을 유발해
+      // 회로차단기까지 트립시키는 것을 예방(드라이버×청크 = 세션당 수십~수백 요청).
+      if (i > 0) await this.delay(OpenF1ClientService.LOCATION_CHUNK_DELAY_MS);
       const chunk = await this.fetchLocation({
         session_key: sessionKey,
         driver_number: driverNumber,
